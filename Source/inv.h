@@ -1,59 +1,58 @@
-//HEADER_GOES_HERE
+/**
+ * @file inv.h
+ *
+ * Interface of player inventory.
+ */
 #ifndef __INV_H__
 #define __INV_H__
 
-extern int invflag;
-extern void *pInvCels;
-extern int drawsbarflag; // idb
-extern int sgdwLastTime; // check name
+extern BOOL invflag;
+extern BOOL drawsbarflag;
 
-void __cdecl FreeInvGFX();
-void __cdecl InitInv();
-void __fastcall InvDrawSlotBack(int X, int Y, int W, int H);
-void __cdecl DrawInv();
-void __cdecl DrawInvBelt();
-int __fastcall AutoPlace(int pnum, int ii, int sx, int sy, int saveflag);
-int __fastcall SpecialAutoPlace(int pnum, int ii, int sx, int sy, int saveflag);
-int __fastcall GoldAutoPlace(int pnum);
-int __fastcall WeaponAutoPlace(int pnum);
-int __fastcall SwapItem(ItemStruct *a, ItemStruct *b);
-void __fastcall CheckInvPaste(int pnum, int mx, int my);
-void __fastcall CheckInvSwap(int pnum, int bLoc, int idx, int wCI, int seed, int bId);
-void __fastcall CheckInvCut(int pnum, int mx, int my);
-void __fastcall inv_update_rem_item(int pnum, int iv);
-void __fastcall RemoveInvItem(int pnum, int iv);
-void __fastcall RemoveSpdBarItem(int pnum, int iv);
-void __cdecl CheckInvItem();
-void __cdecl CheckInvScrn();
-void __fastcall CheckItemStats(int pnum);
-void __fastcall CheckBookLevel(int pnum);
-void __fastcall CheckQuestItem(int pnum);
-void __fastcall InvGetItem(int pnum, int ii);
-void __fastcall AutoGetItem(int pnum, int ii);
-int __fastcall FindGetItem(int indx, unsigned short ci, int iseed);
-void __fastcall SyncGetItem(int x, int y, int idx, unsigned short ci, int iseed);
-int __fastcall CanPut(int i, int j);
-int __cdecl TryInvPut();
-void __fastcall DrawInvMsg(char *msg);
-int __fastcall InvPutItem(int pnum, int x, int y);
-int __fastcall SyncPutItem(int pnum, int x, int y, int idx, int icreateinfo, int iseed, int Id, int dur, int mdur, int ch, int mch, int ivalue, unsigned int ibuff);
-int __cdecl CheckInvHLight();
-void __fastcall RemoveScroll(int pnum);
-bool __cdecl UseScroll();
-void __fastcall UseStaffCharge(int pnum);
-bool __cdecl UseStaff();
-void __cdecl StartGoldDrop();
-int __fastcall UseInvItem(int pnum, int cii);
-void __cdecl DoTelekinesis();
-int __fastcall CalculateGold(int pnum);
-int __cdecl DropItemBeforeTrig();
+void FreeInvGFX();
+void InitInv();
+void DrawInv();
+void DrawInvBelt();
+BOOL AutoPlace(int pnum, int ii, int sx, int sy, BOOL saveflag);
+BOOL SpecialAutoPlace(int pnum, int ii, int sx, int sy, BOOL saveflag);
+BOOL GoldAutoPlace(int pnum);
+int SwapItem(ItemStruct *a, ItemStruct *b);
+void CheckInvSwap(int pnum, BYTE bLoc, int idx, WORD wCI, int seed, BOOL bId);
+void inv_update_rem_item(int pnum, BYTE iv);
+void RemoveInvItem(int pnum, int iv);
+#ifdef HELLFIRE
+BOOL inv_diablo_to_hellfire(int pnum);
+#endif
+void RemoveSpdBarItem(int pnum, int iv);
+void CheckInvItem();
+void CheckInvScrn();
+void CheckItemStats(int pnum);
+void InvGetItem(int pnum, int ii);
+void AutoGetItem(int pnum, int ii);
+int FindGetItem(int idx, WORD ci, int iseed);
+void SyncGetItem(int x, int y, int idx, WORD ci, int iseed);
+BOOL CanPut(int x, int y);
+BOOL TryInvPut();
+void DrawInvMsg(const char *msg);
+int InvPutItem(int pnum, int x, int y);
+int SyncPutItem(int pnum, int x, int y, int idx, WORD icreateinfo, int iseed, int Id, int dur, int mdur, int ch, int mch, int ivalue, DWORD ibuff
+#ifdef HELLFIRE
+    ,
+    int to_hit, int max_dam, int min_str, int min_mag, int min_dex, int ac
+#endif
+);
+char CheckInvHLight();
+void RemoveScroll(int pnum);
+BOOL UseScroll();
+void UseStaffCharge(int pnum);
+BOOL UseStaff();
+BOOL UseInvItem(int pnum, int cii);
+void DoTelekinesis();
+int CalculateGold(int pnum);
+BOOL DropItemBeforeTrig();
 
 /* data */
 
-extern InvXY InvRect[73];
-
-/* rdata */
-
-extern int AP2x2Tbl[10]; // weak
+extern int AP2x2Tbl[10];
 
 #endif /* __INV_H__ */

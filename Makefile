@@ -14,7 +14,7 @@ endif
 #     static_cast<NEW_TYPE>(reinterpret_cast<uintptr_t>(ptr))
 # instead of
 #     (NEW_TYPE)(ptr)
-CXXFLAGS=-fpermissive -Wno-write-strings
+CXXFLAGS=-fpermissive
 CPPFLAGS=-MMD -MF $*.d
 LDLIBS=-lgdi32 -lversion -ldiabloui -lstorm
 LDFLAGS=-L./ -static-libgcc -mwindows
@@ -25,7 +25,7 @@ debug: CXXFLAGS += -D_DEBUG
 debug: CPPFLAGS += -D_DEBUG
 debug: devilution.exe
 
-DIABLO_SRC=$(wildcard Source/*.cpp)
+DIABLO_SRC=$(sort $(filter-out Source/_asm.cpp Source/_render.cpp, $(wildcard Source/*.cpp)))
 OBJS=$(DIABLO_SRC:.cpp=.o)
 
 PKWARE_SRC=$(wildcard 3rdParty/PKWare/*.cpp)

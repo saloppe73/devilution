@@ -1,75 +1,58 @@
-//HEADER_GOES_HERE
+/**
+ * @file tmsg.cpp
+ *
+ * Implementation of functionality transmitting chat messages.
+ */
+#include "all.h"
 
-#include "../types.h"
+static TMsg *sgpTimedMsgHead;
 
-TMsg *sgpTimedMsgHead;
-
-int __fastcall tmsg_get(unsigned char *pbMsg, char bLen)
+int tmsg_get(BYTE *pbMsg, DWORD dwMaxLen)
 {
-	unsigned char *v2; // ebx
-	DWORD v3; // eax
-	TMsg *v4; // esi
-	size_t dwMaxLen; // edi
+	int len;
+	TMsg *head;
 
-	v2 = pbMsg;
-	if ( !sgpTimedMsgHead )
+	if (!sgpTimedMsgHead)
 		return 0;
-	v3 = GetTickCount();
-	v4 = sgpTimedMsgHead;
-	if ( (signed int)(*(_DWORD *)&sgpTimedMsgHead[1] - v3) >= 0 )
+
+	if ((int)(sgpTimedMsgHead->hdr.dwTime - GetTickCount()) >= 0)
 		return 0;
-	//sgpTimedMsgHead = (TMsg *)*sgpTimedMsgHead; /* fix */
-	dwMaxLen = (unsigned char)v4[2].hdr.next;
-	memcpy(v2, (char *)&v4[2] + 1, dwMaxLen);
-	mem_free_dbg(v4);
-	return dwMaxLen;
+	head = sgpTimedMsgHead;
+	sgpTimedMsgHead = head->hdr.pNext;
+	len = head->hdr.bLen;
+	// BUGFIX: ignores dwMaxLen
+	memcpy(pbMsg, head->body, len);
+	mem_free_dbg(head);
+	return len;
 }
 
-void __fastcall tmsg_add(unsigned char *pbMsg, char bLen)
+void tmsg_add(BYTE *pbMsg, BYTE bLen)
 {
-	char v2; // bl
-	unsigned char *v3; // ebp
-	size_t v4; // edi
-	TMsg *v5; // eax
-	TMsg *v6; // esi
-	TMsg *v8; // ecx
-	TMsg **v9; // eax
+	TMsg **tail;
 
-	v2 = bLen;
-	v3 = pbMsg;
-	v4 = (unsigned char)bLen;
-	v5 = (TMsg *)DiabloAllocPtr((unsigned char)bLen + 12);
-	v6 = v5;
-	// *v5 = 0; /* fix */
-	v6[2].hdr.next = v2;
-	v6[1].hdr.next = GetTickCount() + 500;
-	memcpy((char *)&v6[2] + 1, v3, v4);
-	v8 = sgpTimedMsgHead;
-	v9 = &sgpTimedMsgHead;
-	/*while ( v8 )
-	{
-		v9 = (TMsg **)v8;
-		v8 = (TMsg *)*v8;
-	} fix */
-	*v9 = v6;
+	TMsg *msg = (TMsg *)DiabloAllocPtr(bLen + sizeof(*msg));
+	msg->hdr.pNext = NULL;
+	msg->hdr.dwTime = GetTickCount() + 500;
+	msg->hdr.bLen = bLen;
+	memcpy(msg->body, pbMsg, bLen);
+	for (tail = &sgpTimedMsgHead; *tail; tail = &(*tail)->hdr.pNext) {
+		;
+	}
+	*tail = msg;
 }
 
-void __cdecl tmsg_cleanup()
+void tmsg_start()
 {
-	TMsg *v0; // eax
-	//TMsg *v1; // esi
+	assert(!sgpTimedMsgHead);
+}
 
-	v0 = sgpTimedMsgHead;
-	if ( sgpTimedMsgHead )
-	{
-		/* do
-		{
-			v1 = (TMsg *)*v0;
-			sgpTimedMsgHead = 0;
-			mem_free_dbg(v0);
-			v0 = v1;
-			sgpTimedMsgHead = v1;
-		}
-		while ( v1 ); fix */
+void tmsg_cleanup()
+{
+	TMsg *next;
+
+	while (sgpTimedMsgHead) {
+		next = sgpTimedMsgHead->hdr.pNext;
+		MemFreeDbg(sgpTimedMsgHead);
+		sgpTimedMsgHead = next;
 	}
 }

@@ -1,418 +1,380 @@
-//HEADER_GOES_HERE
+/**
+ * @file path.cpp
+ *
+ * Implementation of the path finding algorithms.
+ */
+#include "all.h"
 
-#include "../types.h"
-
-PATHNODE path_nodes[300];
+/** Notes visisted by the path finding algorithm. */
+PATHNODE path_nodes[MAXPATHNODES];
+/** size of the pnode_tblptr stack */
 int gdwCurPathStep;
-int pnode_vals[26];
+/** the number of in-use nodes in path_nodes */
+int gdwCurNodes;
+/**
+ * for reconstructing the path after the A* search is done. The longest
+ * possible path is actually 24 steps, even though we can fit 25
+ */
+int pnode_vals[MAX_PATH_LENGTH];
+/** A linked list of all visited nodes */
 PATHNODE *pnode_ptr;
-PATHNODE *pnode_tblptr[300];
-PATHNODE path_2_nodes[300];
+/** A stack for recursively searching nodes */
+PATHNODE *pnode_tblptr[MAXPATHNODES];
+/** A linked list of the A* frontier, sorted by distance */
+PATHNODE *path_2_nodes;
+PATHNODE path_unusednodes[MAXPATHNODES];
 
-char pathxdir[8] = { -1, -1, 1, 1, -1, 0, 1, 0 };
-char pathydir[8] = { -1, 1, -1, 1, 0, -1, 0, 1 };
+/** For iterating over the 8 possible movement directions */
+const char pathxdir[8] = { -1, -1, 1, 1, -1, 0, 1, 0 };
+const char pathydir[8] = { -1, 1, -1, 1, 0, -1, 0, 1 };
 
-/* rdata */
+/* data */
+
+/**
+ * each step direction is assigned a number like this:
+ *       dx
+ *     -1 0 1
+ *     +-----
+ *   -1|5 1 6
+ * dy 0|2 0 3
+ *    1|8 4 7
+ */
 char path_directions[9] = { 5, 1, 6, 2, 0, 3, 8, 4, 7 };
 
-int __fastcall FindPath(bool (__fastcall *PosOk)(int, int, int), int PosOkArg, int sx, int sy, int dx, int dy, char *path)
+/**
+ * find the shortest path from (sx,sy) to (dx,dy), using PosOk(PosOkArg,x,y) to
+ * check that each step is a valid position. Store the step directions (see
+ * path_directions) in path, which must have room for 24 steps
+ */
+int FindPath(BOOL (*PosOk)(int, int, int), int PosOkArg, int sx, int sy, int dx, int dy, char *path)
 {
-	PATHNODE *v8; // esi
-	char v9; // al
-	PATHNODE *v11; // eax
-	int result; // eax
-	PATHNODE *v13; // edx
-	int v14; // eax
-	int v15; // edi
-	bool v16; // zf
-	int *v17; // ecx
-	char v18; // dl
+	PATHNODE *path_start, *next_node, *current;
+	int path_length, i;
 
-	pnode_vals[0] = 0;
-	*(_DWORD *)&path_2_nodes[0].f = (unsigned int)path_new_step();
-	gdwCurPathStep = 0;
+	// clear all nodes, create root nodes for the visited/frontier linked lists
+	gdwCurNodes = 0;
+	path_2_nodes = path_new_step();
 	pnode_ptr = path_new_step();
-	v8 = path_new_step();
-	v8->g = 0;
-	v9 = path_get_h_cost(sx, sy, dx, dy);
-	v8->h = v9;
-	v8->x = sx;
-	v8->f = v9 + v8->g;
-	v8->y = sy;
-	*(_DWORD *)(*(_DWORD *)&path_2_nodes[0].f + 48) = (unsigned int)v8;
-	while ( 1 )
-	{
-		v11 = GetNextPath();
-		if ( !v11 )
-			return 0;
-		if ( v11->x == dx && v11->y == dy )
-			break;
-		if ( !path_get_path(PosOk, PosOkArg, v11, dx, dy) )
-			return 0;
-	}
-	v13 = v11;
-	v14 = (int)&v11->Parent;
-	v15 = 0;
-	if ( *(_DWORD *)v14 )
-	{
-		while ( 1 )
-		{
-			v16 = v15 == 25;
-			if ( v15 >= 25 )
-				break;
-			pnode_vals[++v15] = path_directions[3 * (v13->y - *(_DWORD *)(*(_DWORD *)v14 + 8))
-													- *(_DWORD *)(*(_DWORD *)v14 + 4)
-													+ 4
-													+ v13->x];
-			v13 = *(PATHNODE **)v14;
-			v14 = *(_DWORD *)v14 + 12;
-			if ( !*(_DWORD *)v14 )
-			{
-				v16 = v15 == 25;
-				break;
+	gdwCurPathStep = 0;
+	path_start = path_new_step();
+	path_start->g = 0;
+	path_start->h = path_get_h_cost(sx, sy, dx, dy);
+	path_start->x = sx;
+	path_start->f = path_start->h + path_start->g;
+	path_start->y = sy;
+	path_2_nodes->NextNode = path_start;
+	// A* search until we find (dx,dy) or fail
+	while ((next_node = GetNextPath())) {
+		// reached the end, success!
+		if (next_node->x == dx && next_node->y == dy) {
+			current = next_node;
+			path_length = 0;
+			while (current->Parent) {
+				if (path_length >= MAX_PATH_LENGTH)
+					break;
+				pnode_vals[path_length++] = path_directions[3 * (current->y - current->Parent->y) - current->Parent->x + 4 + current->x];
+				current = current->Parent;
 			}
+			if (path_length != MAX_PATH_LENGTH) {
+				for (i = 0; i < path_length; i++)
+					path[i] = pnode_vals[path_length - i - 1];
+				return i;
+			}
+			return 0;
 		}
-		if ( v16 )
+		// ran out of nodes, abort!
+		if (!path_get_path(PosOk, PosOkArg, next_node, dx, dy))
 			return 0;
 	}
-	result = 0;
-	if ( v15 > 0 )
-	{
-		v17 = &pnode_vals[v15];
-		do
-		{
-			v18 = *(_BYTE *)v17;
-			--v17;
-			path[result++] = v18;
-		}
-		while ( result < v15 );
-	}
-	return result;
-}
-
-int __fastcall path_get_h_cost(int sx, int sy, int dx, int dy)
-{
-	int v4; // esi
-	int v5; // edi
-	int v6; // eax
-	int v7; // ecx
-
-	v4 = sy;
-	v5 = abs(sx - dx);
-	v6 = abs(v4 - dy);
-	v7 = v5;
-	if ( v5 >= v6 )
-	{
-		v7 = v6;
-		if ( v5 > v6 )
-			v6 = v5;
-	}
-	return 2 * (v7 + v6);
-}
-
-int __fastcall path_check_equal(PATHNODE *pPath, int dx, int dy)
-{
-	int v4; // [esp-4h] [ebp-4h]
-
-	if ( pPath->x == dx || pPath->y == dy )
-		v4 = 2;
-	else
-		v4 = 3;
-	return v4;
-}
-
-PATHNODE *__cdecl GetNextPath()
-{
-	PATHNODE *result; // eax
-
-	result = *(PATHNODE **)(*(_DWORD *)&path_2_nodes[0].f + 48);
-	if ( result )
-	{
-		*(_DWORD *)(*(_DWORD *)&path_2_nodes[0].f + 48) = (unsigned int)result->NextNode;
-		result->NextNode = pnode_ptr->NextNode;
-		pnode_ptr->NextNode = result;
-	}
-	return result;
-}
-
-bool __fastcall path_solid_pieces(PATHNODE *pPath, int dx, int dy)
-{
-	bool result; // eax
-	int dir; // ecx
-	int v8; // ecx
-	int v10; // edx
-
-	result = 1;
-	dir = path_directions[3 * (dy - pPath->y) - pPath->x + 4 + dx] - 5;
-	if ( !dir )
-	{
-		result = 0;
-		if ( nSolidTable[dPiece[dx][dy + 1]] )
-			return result;
-		v8 = dPiece[dx + 1][dy];
-		goto LABEL_13;
-	}
-	dir--;
-	if ( !dir )
-	{
-		v10 = dPiece[dx][dy + 1];
-		goto LABEL_9;
-	}
-	dir--;
-	if ( !dir )
-	{
-		v10 = dPiece[dx][dy-1]; /* check */
-LABEL_9:
-		result = 0;
-		if ( nSolidTable[v10] )
-			return result;
-		v8 = dPiece[dx-4][dy]; /* check */
-		goto LABEL_13;
-	}
-	if ( dir == 1 )
-	{
-		result = 0;
-		if ( !nSolidTable[dPiece[dx + 1][dy]] )
-		{
-			v8 = dPiece[dx][dy-1]; /* check */
-LABEL_13:
-			if ( nSolidTable[v8] == result )
-				result = 1;
-			return result;
-		}
-	}
-	return result;
-}
-
-int __fastcall path_get_path(bool (__fastcall *PosOk)(int, int, int), int PosOkArg, PATHNODE *pPath, int x, int y)
-{
-	int v5; // eax
-	int dx; // esi
-	int dy; // edi
-	int i; // [esp+14h] [ebp-4h]
-
-	v5 = 0;
-	for ( i = 0; ; v5 = i )
-	{
-		dx = pPath->x + pathxdir[v5];
-		dy = pPath->y + pathydir[v5];
-		if ( !PosOk(PosOkArg, dx, dy) )
-			break;
-		if ( path_solid_pieces(pPath, dx, dy) )
-			goto LABEL_8;
-LABEL_9:
-		if ( ++i >= 8 )
-			return 1;
-	}
-	if ( dx != x || dy != y )
-		goto LABEL_9;
-LABEL_8:
-	if ( path_parent_path(pPath, dx, dy, x, y) )
-		goto LABEL_9;
+	// frontier is empty, no path!
 	return 0;
 }
 
-int __fastcall path_parent_path(PATHNODE *pPath, int dx, int dy, int sx, int sy)
+/**
+ * @brief heuristic, estimated cost from (sx,sy) to (dx,dy)
+ */
+int path_get_h_cost(int sx, int sy, int dx, int dy)
 {
-	PATHNODE *v5; // edi
-	int v6; // ebx
-	PATHNODE *v7; // esi
-	signed int v8; // eax
-	struct PATHNODE **v9; // ecx
-	char v10; // al
-	PATHNODE *v11; // esi
-	signed int v12; // eax
-	struct PATHNODE **v13; // ecx
-	char v14; // al
-	PATHNODE *result; // eax
-	PATHNODE *v16; // esi
-	char v17; // al
-	signed int v18; // ecx
-	struct PATHNODE **v19; // eax
-	int a1; // [esp+Ch] [ebp-4h]
+	int delta_x = abs(sx - dx);
+	int delta_y = abs(sy - dy);
 
-	a1 = dx;
-	v5 = pPath;
-	v6 = pPath->g + path_check_equal(pPath, dx, dy);
-	v7 = path_get_node1(a1, dy);
-	if ( v7 )
-	{
-		v8 = 0;
-		v9 = v5->Child;
-		do
-		{
-			if ( !*v9 )
-				break;
-			++v8;
-			++v9;
-		}
-		while ( v8 < 8 );
-		v5->Child[v8] = v7;
-		if ( v6 < v7->g )
-		{
-			if ( path_solid_pieces(v5, a1, dy) )
-			{
-				v10 = v7->h;
-				v7->Parent = v5;
-				v7->g = v6;
-				v7->f = v6 + v10;
-			}
-		}
-	}
-	else
-	{
-		v11 = path_get_node2(a1, dy);
-		if ( v11 )
-		{
-			v12 = 0;
-			v13 = v5->Child;
-			do
-			{
-				if ( !*v13 )
-					break;
-				++v12;
-				++v13;
-			}
-			while ( v12 < 8 );
-			v5->Child[v12] = v11;
-			if ( v6 < v11->g && path_solid_pieces(v5, a1, dy) )
-			{
-				v14 = v6 + v11->h;
-				v11->Parent = v5;
-				v11->g = v6;
-				v11->f = v14;
-				path_set_coords(v11);
-			}
-		}
-		else
-		{
-			result = path_new_step();
-			v16 = result;
-			if ( !result )
-				return 0;
-			result->Parent = v5;
-			result->g = v6;
-			v17 = path_get_h_cost(a1, dy, sx, sy);
-			v16->h = v17;
-			v16->f = v6 + v17;
-			v16->x = a1;
-			v16->y = dy;
-			path_next_node(v16);
-			v18 = 0;
-			v19 = v5->Child;
-			do
-			{
-				if ( !*v19 )
-					break;
-				++v18;
-				++v19;
-			}
-			while ( v18 < 8 );
-			v5->Child[v18] = v16;
-		}
-	}
-	return 1;
+	int min = delta_x < delta_y ? delta_x : delta_y;
+	int max = delta_x > delta_y ? delta_x : delta_y;
+
+	// see path_check_equal for why this is times 2
+	return 2 * (min + max);
 }
 
-PATHNODE *__fastcall path_get_node1(int dx, int dy)
+/**
+ * @brief return 2 if pPath is horizontally/vertically aligned with (dx,dy), else 3
+ *
+ * This approximates that diagonal movement on a square grid should have a cost
+ * of sqrt(2). That's approximately 1.5, so they multiply all step costs by 2,
+ * except diagonal steps which are times 3
+ */
+int path_check_equal(PATHNODE *pPath, int dx, int dy)
 {
-	PATHNODE *result; // eax
+	if (pPath->x == dx || pPath->y == dy)
+		return 2;
 
-	result = *(PATHNODE **)&path_2_nodes[0].f;
-	do
-		result = result->NextNode;
-	while ( result && (result->x != dx || result->y != dy) );
+	return 3;
+}
+
+/**
+ * @brief get the next node on the A* frontier to explore (estimated to be closest to the goal), mark it as visited, and return it
+ */
+PATHNODE *GetNextPath()
+{
+	PATHNODE *result;
+
+	result = path_2_nodes->NextNode;
+	if (result == NULL) {
+		return result;
+	}
+
+	path_2_nodes->NextNode = result->NextNode;
+	result->NextNode = pnode_ptr->NextNode;
+	pnode_ptr->NextNode = result;
 	return result;
 }
 
-PATHNODE *__fastcall path_get_node2(int dx, int dy)
+/**
+ * @brief check if stepping from pPath to (dx,dy) cuts a corner.
+ *
+ * If you step from A to B, both Xs need to be clear:
+ *
+ *  AX
+ *  XB
+ *
+ *  @return true if step is allowed
+ */
+BOOL path_solid_pieces(PATHNODE *pPath, int dx, int dy)
 {
-	PATHNODE *result; // eax
-
-	result = pnode_ptr;
-	do
-		result = result->NextNode;
-	while ( result && (result->x != dx || result->y != dy) );
-	return result;
-}
-
-void __fastcall path_next_node(PATHNODE *pPath)
-{
-	PATHNODE *v1; // edx
-	PATHNODE *v2; // eax
-
-	v1 = *(PATHNODE **)&path_2_nodes[0].f;
-	v2 = *(PATHNODE **)(*(_DWORD *)&path_2_nodes[0].f + 48);
-	if ( v2 )
-	{
-		do
-		{
-			if ( v2->f >= pPath->f )
-				break;
-			v1 = v2;
-			v2 = v2->NextNode;
-		}
-		while ( v2 );
-		pPath->NextNode = v2;
+	BOOL rv = TRUE;
+	switch (path_directions[3 * (dy - pPath->y) + 3 - pPath->x + 1 + dx]) {
+	case 5:
+		rv = !nSolidTable[dPiece[dx][dy + 1]] && !nSolidTable[dPiece[dx + 1][dy]];
+		break;
+	case 6:
+		rv = !nSolidTable[dPiece[dx][dy + 1]] && !nSolidTable[dPiece[dx - 1][dy]];
+		break;
+	case 7:
+		rv = !nSolidTable[dPiece[dx][dy - 1]] && !nSolidTable[dPiece[dx - 1][dy]];
+		break;
+	case 8:
+		rv = !nSolidTable[dPiece[dx + 1][dy]] && !nSolidTable[dPiece[dx][dy - 1]];
+		break;
 	}
-	v1->NextNode = pPath;
+	return rv;
 }
 
-void __fastcall path_set_coords(PATHNODE *pPath)
+/**
+ * @brief perform a single step of A* bread-first search by trying to step in every possible direction from pPath with goal (x,y). Check each step with PosOk
+ *
+ * @return FALSE if we ran out of preallocated nodes to use, else TRUE
+ */
+BOOL path_get_path(BOOL (*PosOk)(int, int, int), int PosOkArg, PATHNODE *pPath, int x, int y)
 {
-	PATHNODE *PathOld; // edi
-	PATHNODE *PathAct; // esi
-	char v6; // al
-	int i; // [esp+0h] [ebp-8h]
-	PATHNODE **v9; // [esp+4h] [ebp-4h]
+	int dx, dy;
+	int i;
+	BOOL ok;
+
+	for (i = 0; i < 8; i++) {
+		dx = pPath->x + pathxdir[i];
+		dy = pPath->y + pathydir[i];
+		ok = PosOk(PosOkArg, dx, dy);
+		if (ok && path_solid_pieces(pPath, dx, dy) || !ok && dx == x && dy == y) {
+			if (!path_parent_path(pPath, dx, dy, x, y))
+				return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
+/**
+ * @brief add a step from pPath to (dx,dy), return 1 if successful, and update the frontier/visited nodes accordingly
+ *
+ * @return TRUE if step successfully added, FALSE if we ran out of nodes to use
+ */
+BOOL path_parent_path(PATHNODE *pPath, int dx, int dy, int sx, int sy)
+{
+	int next_g;
+	PATHNODE *dxdy;
+	int i;
+
+	next_g = pPath->g + path_check_equal(pPath, dx, dy);
+
+	// 3 cases to consider
+	// case 1: (dx,dy) is already on the frontier
+	dxdy = path_get_node1(dx, dy);
+	if (dxdy != NULL) {
+		for (i = 0; i < 8; i++) {
+			if (pPath->Child[i] == NULL)
+				break;
+		}
+		pPath->Child[i] = dxdy;
+		if (next_g < dxdy->g) {
+			if (path_solid_pieces(pPath, dx, dy)) {
+				// we'll explore it later, just update
+				dxdy->Parent = pPath;
+				dxdy->g = next_g;
+				dxdy->f = next_g + dxdy->h;
+			}
+		}
+	} else {
+		// case 2: (dx,dy) was already visited
+		dxdy = path_get_node2(dx, dy);
+		if (dxdy != NULL) {
+			for (i = 0; i < 8; i++) {
+				if (pPath->Child[i] == NULL)
+					break;
+			}
+			pPath->Child[i] = dxdy;
+			if (next_g < dxdy->g && path_solid_pieces(pPath, dx, dy)) {
+				// update the node
+				dxdy->Parent = pPath;
+				dxdy->g = next_g;
+				dxdy->f = next_g + dxdy->h;
+				// already explored, so re-update others starting from that node
+				path_set_coords(dxdy);
+			}
+		} else {
+			// case 3: (dx,dy) is totally new
+			dxdy = path_new_step();
+			if (dxdy == NULL)
+				return FALSE;
+			dxdy->Parent = pPath;
+			dxdy->g = next_g;
+			dxdy->h = path_get_h_cost(dx, dy, sx, sy);
+			dxdy->f = next_g + dxdy->h;
+			dxdy->x = dx;
+			dxdy->y = dy;
+			// add it to the frontier
+			path_next_node(dxdy);
+
+			for (i = 0; i < 8; i++) {
+				if (pPath->Child[i] == NULL)
+					break;
+			}
+			pPath->Child[i] = dxdy;
+		}
+	}
+	return TRUE;
+}
+
+/**
+ * @brief return a node for (dx,dy) on the frontier, or NULL if not found
+ */
+PATHNODE *path_get_node1(int dx, int dy)
+{
+	PATHNODE *result = path_2_nodes->NextNode;
+	while (result != NULL) {
+		if (result->x == dx && result->y == dy)
+			return result;
+		result = result->NextNode;
+	}
+	return NULL;
+}
+
+/**
+ * @brief return a node for (dx,dy) if it was visited, or NULL if not found
+ */
+PATHNODE *path_get_node2(int dx, int dy)
+{
+	PATHNODE *result = pnode_ptr->NextNode;
+	while (result != NULL) {
+		if (result->x == dx && result->y == dy)
+			return result;
+		result = result->NextNode;
+	}
+	return NULL;
+}
+
+/**
+ * @brief insert pPath into the frontier (keeping the frontier sorted by total distance)
+ */
+void path_next_node(PATHNODE *pPath)
+{
+	PATHNODE *next, *current;
+	int f;
+
+	next = path_2_nodes;
+	if (!path_2_nodes->NextNode) {
+		path_2_nodes->NextNode = pPath;
+	} else {
+		current = path_2_nodes;
+		next = path_2_nodes->NextNode;
+		f = pPath->f;
+		while (next && next->f < f) {
+			current = next;
+			next = next->NextNode;
+		}
+		pPath->NextNode = next;
+		current->NextNode = pPath;
+	}
+}
+
+/**
+ * @brief update all path costs using depth-first search starting at pPath
+ */
+void path_set_coords(PATHNODE *pPath)
+{
+	PATHNODE *PathOld;
+	PATHNODE *PathAct;
+	int i;
 
 	path_push_active_step(pPath);
-	while ( gdwCurPathStep )
-	{
+	while (gdwCurPathStep) {
 		PathOld = path_pop_active_step();
-		v9 = PathOld->Child;
-		for(i = 0; i < 8; i++)
-		{
-			PathAct = *v9;
-			if ( !*v9 )
+		for (i = 0; i < 8; i++) {
+			PathAct = PathOld->Child[i];
+			if (PathAct == NULL)
 				break;
 
-			if ( PathOld->g + path_check_equal(PathOld, PathAct->x, PathAct->y) < PathAct->g )
-			{
-				if ( path_solid_pieces(PathOld, PathAct->x, PathAct->y) )
-				{
+			if (PathOld->g + path_check_equal(PathOld, PathAct->x, PathAct->y) < PathAct->g) {
+				if (path_solid_pieces(PathOld, PathAct->x, PathAct->y)) {
 					PathAct->Parent = PathOld;
-					v6 = PathOld->g + path_check_equal(PathOld, PathAct->x, PathAct->y);
-					PathAct->g = v6;
-					PathAct->f = v6 + PathAct->h;
+					PathAct->g = PathOld->g + path_check_equal(PathOld, PathAct->x, PathAct->y);
+					PathAct->f = PathAct->g + PathAct->h;
 					path_push_active_step(PathAct);
 				}
 			}
-			++v9;
 		}
 	}
 }
 
-void __fastcall path_push_active_step(PATHNODE *pPath)
+/**
+ * @brief push pPath onto the pnode_tblptr stack
+ */
+void path_push_active_step(PATHNODE *pPath)
 {
-	int v1; // eax
-
-	v1 = gdwCurPathStep++;
-	pnode_tblptr[v1] = pPath;
+	int stack_index = gdwCurPathStep;
+	gdwCurPathStep++;
+	pnode_tblptr[stack_index] = pPath;
 }
 
-PATHNODE *__cdecl path_pop_active_step()
+/**
+ * @brief pop and return a node from the pnode_tblptr stack
+ */
+PATHNODE *path_pop_active_step()
 {
-	return pnode_tblptr[--gdwCurPathStep];
+	gdwCurPathStep--;
+	return pnode_tblptr[gdwCurPathStep];
 }
 
-PATHNODE *__cdecl path_new_step()
+/**
+ * @brief zero one of the preallocated nodes and return a pointer to it, or NULL if none are available
+ */
+PATHNODE *path_new_step()
 {
-	PATHNODE *v1; // esi
+	PATHNODE *new_node;
 
-	if ( pnode_vals[0] == 300 )
-		return 0;
-	v1 = &path_nodes[pnode_vals[0]++];
-	memset(v1, 0, 0x34u);
-	return v1;
+	if (gdwCurNodes == MAXPATHNODES)
+		return NULL;
+
+	new_node = &path_nodes[gdwCurNodes];
+	gdwCurNodes++;
+	memset(new_node, 0, sizeof(PATHNODE));
+	return new_node;
 }

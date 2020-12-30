@@ -1,94 +1,147 @@
-//HEADER_GOES_HERE
+/**
+ * @file doom.cpp
+ *
+ * Implementation of the map of the stars quest.
+ */
+#include "all.h"
 
-#include "../types.h"
+int doom_quest_time;
+int doom_stars_drawn;
+BYTE *pDoomCel;
+DIABOOL doomflag;
+int DoomQuestState;
 
-int doom_quest_time; // weak
-int doom_stars_drawn; // weak
-void *pDoomCel;
-int doomflag; // weak
-int DoomQuestState; // idb
-
-int __cdecl doom_get_frame_from_time()
+/*
+void doom_reset_state()
 {
-	int result; // eax
-
-	if ( DoomQuestState == 36001 )
-		result = 31;
-	else
-		result = DoomQuestState / 1200;
-	return result;
+    if (DoomQuestState <= 0) {
+        DoomQuestState = 0;
+    }
 }
 
-void __cdecl doom_alloc_cel()
+void doom_play_movie()
 {
-	pDoomCel = DiabloAllocPtr(229376);
+    if (DoomQuestState < 36001) {
+        DoomQuestState++;
+        if (DoomQuestState == 36001) {
+            PlayInGameMovie("gendata\\doom.smk");
+            DoomQuestState++;
+        }
+    }
 }
+*/
 
-void __cdecl doom_cleanup()
+int doom_get_frame_from_time()
 {
-	void *v0; // ecx
-
-	v0 = pDoomCel;
-	pDoomCel = 0;
-	mem_free_dbg(v0);
-}
-
-void __cdecl doom_load_graphics()
-{
-	if ( doom_quest_time == 31 )
-	{
-		strcpy(tempstr, "Items\\Map\\MapZDoom.CEL");
+	if (DoomQuestState == 36001) {
+		return 31;
 	}
-	else if ( doom_quest_time >= 10 )
-	{
+
+	return DoomQuestState / 1200;
+}
+
+void doom_cleanup()
+{
+#ifdef HELLFIRE
+	if (pDoomCel != NULL) {
+		MemFreeDbg(pDoomCel);
+		pDoomCel = NULL;
+	}
+#else
+	MemFreeDbg(pDoomCel);
+#endif
+}
+
+#ifdef HELLFIRE
+static BOOLEAN doom_alloc_cel()
+#else
+static void doom_alloc_cel()
+#endif
+{
+#ifdef HELLFIRE
+	doom_cleanup();
+	pDoomCel = DiabloAllocPtr(0x39000);
+	return pDoomCel ? TRUE : FALSE;
+#else
+	pDoomCel = DiabloAllocPtr(0x38000);
+#endif
+}
+
+#ifdef HELLFIRE
+static BOOLEAN doom_load_graphics()
+#else
+static void doom_load_graphics()
+#endif
+{
+#ifdef HELLFIRE
+	BOOLEAN ret;
+
+	ret = FALSE;
+	strcpy(tempstr, "Items\\Map\\MapZtown.CEL");
+	if (LoadFileWithMem(tempstr, pDoomCel))
+		ret = TRUE;
+	return ret;
+#else
+	if (doom_quest_time == 31) {
+		strcpy(tempstr, "Items\\Map\\MapZDoom.CEL");
+	} else if (doom_quest_time < 10) {
+		sprintf(tempstr, "Items\\Map\\MapZ000%i.CEL", doom_quest_time);
+	} else {
 		sprintf(tempstr, "Items\\Map\\MapZ00%i.CEL", doom_quest_time);
 	}
-	else
-	{
-		sprintf(tempstr, "Items\\Map\\MapZ000%i.CEL", doom_quest_time);
-	}
 	LoadFileWithMem(tempstr, pDoomCel);
+#endif
 }
-// 525750: using guessed type int doom_quest_time;
 
-void __cdecl doom_init()
+void doom_init()
 {
-	int v0; // eax
-
-	doomflag = 1;
-	doom_alloc_cel();
-	v0 = -(doom_get_frame_from_time() != 31);
-	_LOBYTE(v0) = v0 & 0xE1;
-	doom_quest_time = v0 + 31;
-	doom_load_graphics();
-}
-// 525750: using guessed type int doom_quest_time;
-// 52575C: using guessed type int doomflag;
-
-void __cdecl doom_close()
-{
-	if ( doomflag )
-	{
-		doomflag = 0;
-		doom_cleanup();
+#ifdef HELLFIRE
+	if (doom_alloc_cel()) {
+		doom_quest_time = doom_get_frame_from_time() == 31 ? 31 : 0;
+		if (doom_load_graphics()) {
+			doomflag = TRUE;
+		} else {
+			doom_close();
+		}
 	}
+#else
+	doomflag = TRUE;
+	doom_alloc_cel();
+	doom_quest_time = doom_get_frame_from_time() == 31 ? 31 : 0;
+	doom_load_graphics();
+#endif
 }
-// 52575C: using guessed type int doomflag;
 
-void __cdecl doom_draw()
+void doom_close()
 {
-	if ( doomflag )
-	{
-		if ( doom_quest_time != 31 && ++doom_stars_drawn >= 5 )
-		{
+#ifndef HELLFIRE
+	if (doomflag) {
+#endif
+		doomflag = FALSE;
+		doom_cleanup();
+#ifndef HELLFIRE
+	}
+#endif
+}
+
+void doom_draw()
+{
+	if (!doomflag) {
+		return;
+	}
+#ifndef HELLFIRE
+	if (doom_quest_time != 31) {
+		doom_stars_drawn++;
+		if (doom_stars_drawn >= 5) {
 			doom_stars_drawn = 0;
-			if ( ++doom_quest_time > doom_get_frame_from_time() )
+			doom_quest_time++;
+			if (doom_quest_time > doom_get_frame_from_time()) {
 				doom_quest_time = 0;
+			}
 			doom_load_graphics();
 		}
-		CelDecodeOnly(64, 511, pDoomCel, 1, 640);
 	}
+#endif
+
+	CelDraw(SCREEN_X, PANEL_Y - 1, pDoomCel, 1, 640);
 }
-// 525750: using guessed type int doom_quest_time;
-// 525754: using guessed type int doom_stars_drawn;
-// 52575C: using guessed type int doomflag;

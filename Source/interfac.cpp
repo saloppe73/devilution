@@ -1,383 +1,478 @@
-//HEADER_GOES_HERE
+/**
+ * @file interfac.cpp
+ *
+ * Implementation of load screens.
+ */
+#include "all.h"
+#include "../3rdParty/Storm/Source/storm.h"
 
-#include "../types.h"
-
-void *sgpBackCel;
-float interfac_cpp_init_value;
+BYTE *sgpBackCel;
 int sgdwProgress;
-int progress_id; // idb
+int progress_id;
 
-int interfac_inf = 0x7F800000; // weak
-unsigned char progress_bar_colours[3] = { 138u, 43u, 254u };
-POINT32 progress_bar_screen_pos[3] = { { 53, 37 }, { 53, 421 }, { 53, 37 } };
+/** The colour used for the progress bar as an index into the palette. */
+const BYTE BarColor[3] = { 138, 43, 254 };
+/** The screen position of the top left corner of the progress bar. */
+const int BarPos[3][2] = { { 53, 37 }, { 53, 421 }, { 53, 37 } };
 
-struct interfac_cpp_init
+static void FreeInterface()
 {
-	interfac_cpp_init()
-	{
-		interfac_cpp_init_value = interfac_inf;
+	MemFreeDbg(sgpBackCel);
+}
+
+static void InitCutscene(unsigned int uMsg)
+{
+	assert(!sgpBackCel);
+
+	switch (uMsg) {
+	case WM_DIABNEXTLVL:
+		switch (gnLevelTypeTbl[currlevel]) {
+		case DTYPE_TOWN:
+			sgpBackCel = LoadFileInMem("Gendata\\Cuttt.CEL", NULL);
+			LoadPalette("Gendata\\Cuttt.pal");
+			progress_id = 1;
+			break;
+		case DTYPE_CATHEDRAL:
+#ifdef HELLFIRE
+			if (currlevel < 17) {
+#endif
+				sgpBackCel = LoadFileInMem("Gendata\\Cutl1d.CEL", NULL);
+				LoadPalette("Gendata\\Cutl1d.pal");
+				progress_id = 0;
+#ifdef HELLFIRE
+			} else {
+				sgpBackCel = LoadFileInMem("Nlevels\\cutl5.CEL", NULL);
+				LoadPalette("Nlevels\\cutl5.pal");
+				progress_id = 1;
+			}
+#endif
+			break;
+		case DTYPE_CATACOMBS:
+			sgpBackCel = LoadFileInMem("Gendata\\Cut2.CEL", NULL);
+			LoadPalette("Gendata\\Cut2.pal");
+			progress_id = 2;
+			break;
+		case DTYPE_CAVES:
+#ifdef HELLFIRE
+			if (currlevel < 17) {
+#endif
+				sgpBackCel = LoadFileInMem("Gendata\\Cut3.CEL", NULL);
+				LoadPalette("Gendata\\Cut3.pal");
+				progress_id = 1;
+#ifdef HELLFIRE
+			} else {
+				sgpBackCel = LoadFileInMem("Nlevels\\cutl6.CEL", NULL);
+				LoadPalette("Nlevels\\cutl6.pal");
+				progress_id = 1;
+			}
+#endif
+			break;
+		case DTYPE_HELL:
+			if (currlevel < 15) {
+				sgpBackCel = LoadFileInMem("Gendata\\Cut4.CEL", NULL);
+				LoadPalette("Gendata\\Cut4.pal");
+				progress_id = 1;
+			} else {
+				sgpBackCel = LoadFileInMem("Gendata\\Cutgate.CEL", NULL);
+				LoadPalette("Gendata\\Cutgate.pal");
+				progress_id = 1;
+			}
+			break;
+		default:
+			sgpBackCel = LoadFileInMem("Gendata\\Cutl1d.CEL", NULL);
+			LoadPalette("Gendata\\Cutl1d.pal");
+			progress_id = 0;
+			break;
+		}
+		break;
+	case WM_DIABPREVLVL:
+		if (gnLevelTypeTbl[currlevel - 1] == 0) {
+			sgpBackCel = LoadFileInMem("Gendata\\Cuttt.CEL", NULL);
+			LoadPalette("Gendata\\Cuttt.pal");
+			progress_id = 1;
+		} else {
+			switch (gnLevelTypeTbl[currlevel]) {
+			case DTYPE_TOWN:
+				sgpBackCel = LoadFileInMem("Gendata\\Cuttt.CEL", NULL);
+				LoadPalette("Gendata\\Cuttt.pal");
+				progress_id = 1;
+				break;
+			case DTYPE_CATHEDRAL:
+#ifdef HELLFIRE
+				if (currlevel < 17) {
+#endif
+					sgpBackCel = LoadFileInMem("Gendata\\Cutl1d.CEL", NULL);
+					LoadPalette("Gendata\\Cutl1d.pal");
+					progress_id = 0;
+#ifdef HELLFIRE
+				} else {
+					sgpBackCel = LoadFileInMem("Nlevels\\cutl5.CEL", NULL);
+					LoadPalette("Nlevels\\cutl5.pal");
+					progress_id = 1;
+				}
+#endif
+				break;
+			case DTYPE_CATACOMBS:
+				sgpBackCel = LoadFileInMem("Gendata\\Cut2.CEL", NULL);
+				LoadPalette("Gendata\\Cut2.pal");
+				progress_id = 2;
+				break;
+			case DTYPE_CAVES:
+#ifdef HELLFIRE
+				if (currlevel < 17) {
+#endif
+					sgpBackCel = LoadFileInMem("Gendata\\Cut3.CEL", NULL);
+					LoadPalette("Gendata\\Cut3.pal");
+					progress_id = 1;
+#ifdef HELLFIRE
+				} else {
+					sgpBackCel = LoadFileInMem("Nlevels\\cutl6.CEL", NULL);
+					LoadPalette("Nlevels\\cutl6.pal");
+					progress_id = 1;
+				}
+#endif
+				break;
+			case DTYPE_HELL:
+				sgpBackCel = LoadFileInMem("Gendata\\Cut4.CEL", NULL);
+				LoadPalette("Gendata\\Cut4.pal");
+				progress_id = 1;
+				break;
+			default:
+				sgpBackCel = LoadFileInMem("Gendata\\Cutl1d.CEL", NULL);
+				LoadPalette("Gendata\\Cutl1d.pal");
+				progress_id = 0;
+				break;
+			}
+		}
+		break;
+	case WM_DIABSETLVL:
+		if (setlvlnum == SL_BONECHAMB) {
+			sgpBackCel = LoadFileInMem("Gendata\\Cut2.CEL", NULL);
+			LoadPalette("Gendata\\Cut2.pal");
+			progress_id = 2;
+		} else if (setlvlnum == SL_VILEBETRAYER) {
+			sgpBackCel = LoadFileInMem("Gendata\\Cutportr.CEL", NULL);
+			LoadPalette("Gendata\\Cutportr.pal");
+			progress_id = 1;
+		} else {
+			sgpBackCel = LoadFileInMem("Gendata\\Cutl1d.CEL", NULL);
+			LoadPalette("Gendata\\Cutl1d.pal");
+			progress_id = 0;
+		}
+		break;
+	case WM_DIABRTNLVL:
+		if (setlvlnum == SL_BONECHAMB) {
+			sgpBackCel = LoadFileInMem("Gendata\\Cut2.CEL", NULL);
+			LoadPalette("Gendata\\Cut2.pal");
+			progress_id = 2;
+		} else if (setlvlnum == SL_VILEBETRAYER) {
+			sgpBackCel = LoadFileInMem("Gendata\\Cutportr.CEL", NULL);
+			LoadPalette("Gendata\\Cutportr.pal");
+			progress_id = 1;
+		} else {
+			sgpBackCel = LoadFileInMem("Gendata\\Cutl1d.CEL", NULL);
+			LoadPalette("Gendata\\Cutl1d.pal");
+			progress_id = 0;
+		}
+		break;
+	case WM_DIABWARPLVL:
+		sgpBackCel = LoadFileInMem("Gendata\\Cutportl.CEL", NULL);
+		LoadPalette("Gendata\\Cutportl.pal");
+		progress_id = 1;
+		break;
+	case WM_DIABLOADGAME:
+		sgpBackCel = LoadFileInMem("Gendata\\Cutstart.CEL", NULL);
+		LoadPalette("Gendata\\Cutstart.pal");
+		progress_id = 1;
+		break;
+	case WM_DIABNEWGAME:
+		sgpBackCel = LoadFileInMem("Gendata\\Cutstart.CEL", NULL);
+		LoadPalette("Gendata\\Cutstart.pal");
+		progress_id = 1;
+		break;
+	case WM_DIABTOWNWARP:
+	case WM_DIABTWARPUP:
+		switch (gnLevelTypeTbl[plr[myplr].plrlevel]) {
+		case DTYPE_TOWN:
+			sgpBackCel = LoadFileInMem("Gendata\\Cuttt.CEL", NULL);
+			LoadPalette("Gendata\\Cuttt.pal");
+			progress_id = 1;
+			break;
+#ifdef HELLFIRE
+		case DTYPE_CATHEDRAL:
+			if (plr[myplr].plrlevel < 17) {
+				sgpBackCel = LoadFileInMem("Gendata\\Cutl1d.CEL", NULL);
+				LoadPalette("Gendata\\Cutl1d.pal");
+				progress_id = 0;
+			} else {
+				sgpBackCel = LoadFileInMem("Nlevels\\Cutl5.CEL", NULL);
+				LoadPalette("Nlevels\\Cutl5.pal");
+				progress_id = 1;
+			}
+			break;
+#endif
+		case DTYPE_CATACOMBS:
+			sgpBackCel = LoadFileInMem("Gendata\\Cut2.CEL", NULL);
+			LoadPalette("Gendata\\Cut2.pal");
+			progress_id = 2;
+			break;
+		case DTYPE_CAVES:
+#ifdef HELLFIRE
+			if (plr[myplr].plrlevel < 17) {
+#endif
+				sgpBackCel = LoadFileInMem("Gendata\\Cut3.CEL", NULL);
+				LoadPalette("Gendata\\Cut3.pal");
+				progress_id = 1;
+#ifdef HELLFIRE
+			} else {
+				sgpBackCel = LoadFileInMem("Nlevels\\Cutl6.CEL", NULL);
+				LoadPalette("Nlevels\\Cutl6.pal");
+				progress_id = 1;
+			}
+#endif
+			break;
+		case DTYPE_HELL:
+			sgpBackCel = LoadFileInMem("Gendata\\Cut4.CEL", NULL);
+			LoadPalette("Gendata\\Cut4.pal");
+			progress_id = 1;
+			break;
+		}
+		break;
+	case WM_DIABRETOWN:
+		sgpBackCel = LoadFileInMem("Gendata\\Cuttt.CEL", NULL);
+		LoadPalette("Gendata\\Cuttt.pal");
+		progress_id = 1;
+		break;
+	default:
+		app_fatal("Unknown progress mode");
+		break;
 	}
-} _interfac_cpp_init;
-// 47AE40: using guessed type int interfac_inf;
 
-void __cdecl interface_msg_pump()
+	sgdwProgress = 0;
+}
+
+static void DrawProgress(int screen_x, int screen_y, int progress_id)
 {
-	MSG Msg; // [esp+8h] [ebp-1Ch]
+	BYTE *dst;
+	int i;
 
-	while ( PeekMessageA(&Msg, NULL, 0, 0, PM_REMOVE) )
-	{
-		if ( Msg.message != WM_QUIT )
-		{
+	dst = &gpBuffer[screen_x + PitchTbl[screen_y]];
+	for (i = 0; i < 22; i++) {
+		*dst = BarColor[progress_id];
+		dst += BUFFER_WIDTH;
+	}
+}
+
+static void DrawCutscene()
+{
+	DWORD i;
+
+	lock_buf(1);
+	CelDraw(PANEL_X, 480 + SCREEN_Y - 1, sgpBackCel, 1, 640);
+
+	for (i = 0; i < sgdwProgress; i++) {
+		DrawProgress(
+		    BarPos[progress_id][0] + i + PANEL_X,
+		    BarPos[progress_id][1] + SCREEN_Y,
+		    progress_id);
+	}
+
+	unlock_buf(1);
+	force_redraw = 255;
+	scrollrt_draw_game_screen(FALSE);
+}
+
+void interface_msg_pump()
+{
+	MSG Msg;
+
+	while (PeekMessage(&Msg, NULL, 0, 0, PM_REMOVE)) {
+		if (Msg.message != WM_QUIT) {
 			TranslateMessage(&Msg);
-			DispatchMessageA(&Msg);
+			DispatchMessage(&Msg);
 		}
 	}
 }
 
-bool __cdecl IncProgress()
+BOOL IncProgress()
 {
 	interface_msg_pump();
 	sgdwProgress += 15;
-	if ( (unsigned int)sgdwProgress > 0x216 )
+	if ((DWORD)sgdwProgress > 534)
 		sgdwProgress = 534;
-	if ( sgpBackCel )
+	if (sgpBackCel)
 		DrawCutscene();
-	return (unsigned int)sgdwProgress >= 0x216;
+	return (DWORD)sgdwProgress >= 534;
 }
 
-void __cdecl DrawCutscene()
+void ShowProgress(unsigned int uMsg)
 {
-	unsigned int v0; // esi
+	WNDPROC saveProc;
 
-	dx_lock_mutex();
-	CelDecodeOnly(64, 639, sgpBackCel, 1, 640);
-	v0 = 0;
-	if ( sgdwProgress )
-	{
-		do
-			DrawProgress(
-				progress_bar_screen_pos[progress_id].x + v0++ + 64,
-				progress_bar_screen_pos[progress_id].y + 160,
-				progress_id);
-		while ( v0 < sgdwProgress );
-	}
-	dx_unlock_mutex();
-	drawpanflag = 255;
-	scrollrt_draw_game_screen(0);
-}
-// 52571C: using guessed type int drawpanflag;
+	gbSomebodyWonGameKludge = FALSE;
+	plrmsg_delay(TRUE);
 
-void __fastcall DrawProgress(int screen_x, int screen_y, int progress_id)
-{
-	_BYTE *v3; // eax
-	signed int v4; // ecx
-
-	v3 = (unsigned char *)gpBuffer + screen_y_times_768[screen_y] + screen_x;
-	v4 = 22;
-	do
-	{
-		*v3 = progress_bar_colours[progress_id];
-		v3 += 768;
-		--v4;
-	}
-	while ( v4 );
-}
-
-void __fastcall ShowProgress(int uMsg)
-{
-	LRESULT (__stdcall *saveProc)(HWND, UINT, WPARAM, LPARAM); // edi
-	bool v3; // cl
-	int v4; // eax
-	int v5; // edx
-	signed int v7; // [esp-4h] [ebp-10h]
-
-	gbSomebodyWonGameKludge = 0;
-	plrmsg_delay(1);
+	assert(ghMainWnd);
 	saveProc = SetWindowProc(DisableInputWndProc);
+
 	interface_msg_pump();
 	ClearScreenBuffer();
-	scrollrt_draw_game_screen(1);
+	scrollrt_draw_game_screen(TRUE);
 	InitCutscene(uMsg);
 	BlackPalette();
 	DrawCutscene();
 	PaletteFadeIn(8);
 	IncProgress();
-	stream_update();
+	sound_init();
 	IncProgress();
-	switch ( uMsg )
-	{
-		case WM_DIABNEXTLVL:
-			IncProgress();
-			if ( gbMaxPlayers == 1 )
-				SaveLevel();
-			else
-				DeltaSaveLevel();
-			FreeGameMem();
-			v4 = ++currlevel;
-			goto LABEL_38;
-		case WM_DIABPREVLVL:
-			IncProgress();
-			if ( gbMaxPlayers == 1 )
-				SaveLevel();
-			else
-				DeltaSaveLevel();
-			IncProgress();
-			FreeGameMem();
-			leveltype = gnLevelTypeTbl[--currlevel];
-			IncProgress();
-			v5 = 1;
-			goto LABEL_33;
-		case WM_DIABRTNLVL:
-			if ( gbMaxPlayers == 1 )
-				SaveLevel();
-			else
-				DeltaSaveLevel();
-			setlevel = 0;
-			FreeGameMem();
-			IncProgress();
-			GetReturnLvlPos();
-			v7 = 3;
-			goto LABEL_32;
-		case WM_DIABSETLVL:
-			SetReturnLvlPos();
-			if ( gbMaxPlayers == 1 )
-				SaveLevel();
-			else
-				DeltaSaveLevel();
-			setlevel = 1;
-			leveltype = setlvltype;
-			FreeGameMem();
-			IncProgress();
-			v7 = 2;
-			goto LABEL_32;
-		case WM_DIABWARPLVL:
-			IncProgress();
-			if ( gbMaxPlayers == 1 )
-				SaveLevel();
-			else
-				DeltaSaveLevel();
-			FreeGameMem();
-			GetPortalLevel();
-			IncProgress();
-			v7 = 5;
-			goto LABEL_32;
-		case WM_DIABTOWNWARP:
-			IncProgress();
-			if ( gbMaxPlayers == 1 )
-				SaveLevel();
-			else
-				DeltaSaveLevel();
-			FreeGameMem();
-			currlevel = plr[myplr].plrlevel;
-			leveltype = gnLevelTypeTbl[currlevel];
-			IncProgress();
-			v7 = 6;
-			goto LABEL_32;
-		case WM_DIABTWARPUP:
-			IncProgress();
-			if ( gbMaxPlayers == 1 )
-				SaveLevel();
-			else
-				DeltaSaveLevel();
-			FreeGameMem();
-			currlevel = plr[myplr].plrlevel;
-			leveltype = gnLevelTypeTbl[currlevel];
-			IncProgress();
-			v7 = 7;
-LABEL_32:
-			v5 = v7;
-LABEL_33:
-			v3 = 0;
-			goto LABEL_40;
-		case WM_DIABRETOWN:
-			IncProgress();
-			if ( gbMaxPlayers == 1 )
-				SaveLevel();
-			else
-				DeltaSaveLevel();
-			FreeGameMem();
-			currlevel = plr[myplr].plrlevel;
-			v4 = currlevel;
-LABEL_38:
-			leveltype = gnLevelTypeTbl[v4];
-			IncProgress();
-			v3 = 0;
-			goto LABEL_39;
-		case WM_DIABNEWGAME:
-			IncProgress();
-			FreeGameMem();
-			IncProgress();
-			pfile_remove_temp_files();
-			v3 = 1;
-LABEL_39:
-			v5 = 0;
-LABEL_40:
-			LoadGameLevel(v3, v5);
-			goto LABEL_41;
-		case WM_DIABLOADGAME:
-			IncProgress();
-			LoadGame(1);
-LABEL_41:
-			IncProgress();
-			break;
-		default:
-			break;
+
+	switch (uMsg) {
+	case WM_DIABLOADGAME:
+		IncProgress();
+		LoadGame(TRUE);
+		IncProgress();
+		break;
+	case WM_DIABNEWGAME:
+		IncProgress();
+		FreeGameMem();
+		IncProgress();
+		pfile_remove_temp_files();
+		LoadGameLevel(TRUE, ENTRY_MAIN);
+		IncProgress();
+		break;
+	case WM_DIABNEXTLVL:
+		IncProgress();
+		if (gbMaxPlayers == 1) {
+			SaveLevel();
+		} else {
+			DeltaSaveLevel();
+		}
+		FreeGameMem();
+		currlevel++;
+		leveltype = gnLevelTypeTbl[currlevel];
+		assert(plr[myplr].plrlevel == currlevel);
+		IncProgress();
+		LoadGameLevel(FALSE, ENTRY_MAIN);
+		IncProgress();
+		break;
+	case WM_DIABPREVLVL:
+		IncProgress();
+		if (gbMaxPlayers == 1) {
+			SaveLevel();
+		} else {
+			DeltaSaveLevel();
+		}
+		IncProgress();
+		FreeGameMem();
+		currlevel--;
+		leveltype = gnLevelTypeTbl[currlevel];
+		assert(plr[myplr].plrlevel == currlevel);
+		IncProgress();
+		LoadGameLevel(FALSE, ENTRY_PREV);
+		IncProgress();
+		break;
+	case WM_DIABSETLVL:
+		SetReturnLvlPos();
+		if (gbMaxPlayers == 1) {
+			SaveLevel();
+		} else {
+			DeltaSaveLevel();
+		}
+		setlevel = TRUE;
+		leveltype = setlvltype;
+		FreeGameMem();
+		IncProgress();
+		LoadGameLevel(FALSE, ENTRY_SETLVL);
+		IncProgress();
+		break;
+	case WM_DIABRTNLVL:
+		if (gbMaxPlayers == 1) {
+			SaveLevel();
+		} else {
+			DeltaSaveLevel();
+		}
+		setlevel = FALSE;
+		FreeGameMem();
+		IncProgress();
+		GetReturnLvlPos();
+		LoadGameLevel(FALSE, ENTRY_RTNLVL);
+		IncProgress();
+		break;
+	case WM_DIABWARPLVL:
+		IncProgress();
+		if (gbMaxPlayers == 1) {
+			SaveLevel();
+		} else {
+			DeltaSaveLevel();
+		}
+		FreeGameMem();
+		GetPortalLevel();
+		IncProgress();
+		LoadGameLevel(FALSE, ENTRY_WARPLVL);
+		IncProgress();
+		break;
+	case WM_DIABTOWNWARP:
+		IncProgress();
+		if (gbMaxPlayers == 1) {
+			SaveLevel();
+		} else {
+			DeltaSaveLevel();
+		}
+		FreeGameMem();
+		currlevel = plr[myplr].plrlevel;
+		leveltype = gnLevelTypeTbl[currlevel];
+		assert(plr[myplr].plrlevel == currlevel);
+		IncProgress();
+		LoadGameLevel(FALSE, ENTRY_TWARPDN);
+		IncProgress();
+		break;
+	case WM_DIABTWARPUP:
+		IncProgress();
+		if (gbMaxPlayers == 1) {
+			SaveLevel();
+		} else {
+			DeltaSaveLevel();
+		}
+		FreeGameMem();
+		currlevel = plr[myplr].plrlevel;
+		leveltype = gnLevelTypeTbl[currlevel];
+		assert(plr[myplr].plrlevel == currlevel);
+		IncProgress();
+		LoadGameLevel(FALSE, ENTRY_TWARPUP);
+		IncProgress();
+		break;
+	case WM_DIABRETOWN:
+		IncProgress();
+		if (gbMaxPlayers == 1) {
+			SaveLevel();
+		} else {
+			DeltaSaveLevel();
+		}
+		FreeGameMem();
+		currlevel = plr[myplr].plrlevel;
+		leveltype = gnLevelTypeTbl[currlevel];
+		assert(plr[myplr].plrlevel == currlevel);
+		IncProgress();
+		LoadGameLevel(FALSE, ENTRY_MAIN);
+		IncProgress();
+		break;
 	}
+
+	assert(ghMainWnd);
+
 	PaletteFadeOut(8);
 	FreeInterface();
-	SetWindowProc(saveProc);
-	NetSendCmdLocParam1(1u, CMD_PLAYER_JOINLEVEL, plr[myplr].WorldX, plr[myplr].WorldY, plr[myplr].plrlevel);
-	plrmsg_delay(0);
+
+	saveProc = SetWindowProc(saveProc);
+	assert(saveProc == DisableInputWndProc);
+
+	NetSendCmdLocParam1(TRUE, CMD_PLAYER_JOINLEVEL, plr[myplr]._px, plr[myplr]._py, plr[myplr].plrlevel);
+	plrmsg_delay(FALSE);
 	ResetPal();
-	if ( gbSomebodyWonGameKludge && plr[myplr].plrlevel == 16 )
+
+	if (gbSomebodyWonGameKludge && plr[myplr].plrlevel == 16) {
 		PrepDoEnding();
-	gbSomebodyWonGameKludge = 0;
-}
-// 5BB1ED: using guessed type char leveltype;
-// 5CF31C: using guessed type char setlvltype;
-// 5CF31D: using guessed type char setlevel;
-// 6761B8: using guessed type char gbSomebodyWonGameKludge;
-// 679660: using guessed type char gbMaxPlayers;
-
-void __cdecl FreeInterface()
-{
-	void *v0; // ecx
-
-	v0 = sgpBackCel;
-	sgpBackCel = 0;
-	mem_free_dbg(v0);
-}
-
-void __fastcall InitCutscene(int interface_mode)
-{
-	int v1; // eax
-	int v2; // eax
-	int v3; // eax
-	int v4; // eax
-	unsigned char *v5; // eax
-	char *v6; // ecx
-	int *v7; // eax
-	int v8; // eax
-	int v9; // eax
-	int v10; // eax
-	int v11; // eax
-	int v12; // eax
-	int v13; // eax
-	int v14; // eax
-
-	switch ( interface_mode )
-	{
-		case WM_DIABNEXTLVL:
-			v1 = gnLevelTypeTbl[currlevel];
-			if ( !v1 )
-				goto LABEL_31;
-			v2 = v1 - 1;
-			if ( !v2 )
-				goto LABEL_10;
-			v3 = v2 - 1;
-			if ( !v3 )
-				goto LABEL_9;
-			v4 = v3 - 1;
-			if ( !v4 )
-				goto LABEL_29;
-			if ( v4 != 1 )
-				goto LABEL_10;
-			if ( currlevel < 0xFu )
-				goto LABEL_28;
-			v5 = LoadFileInMem("Gendata\\Cutgate.CEL", 0);
-			v6 = "Gendata\\Cutgate.pal";
-			goto LABEL_30;
-		case WM_DIABPREVLVL:
-			v7 = &gnLevelTypeTbl[currlevel];
-			if ( !*(v7 - 1) )
-				goto LABEL_31;
-			v8 = *v7;
-			if ( !v8 )
-				goto LABEL_31;
-			v9 = v8 - 1;
-			if ( !v9 )
-				goto LABEL_10;
-			v10 = v9 - 1;
-			if ( !v10 )
-			{
-LABEL_9:
-				sgpBackCel = LoadFileInMem("Gendata\\Cut2.CEL", 0);
-				LoadPalette("Gendata\\Cut2.pal");
-				progress_id = 2;
-				goto LABEL_33;
-			}
-			v11 = v10 - 1;
-			if ( !v11 )
-				goto LABEL_29;
-			if ( v11 == 1 )
-				goto LABEL_28;
-LABEL_10:
-			sgpBackCel = LoadFileInMem("Gendata\\Cutl1d.CEL", 0);
-			LoadPalette("Gendata\\Cutl1d.pal");
-			progress_id = 0;
-			goto LABEL_33;
-		case WM_DIABRTNLVL:
-		case WM_DIABSETLVL:
-			if ( setlvlnum == SL_BONECHAMB )
-				goto LABEL_21;
-			if ( setlvlnum != SL_VILEBETRAYER )
-				goto LABEL_10;
-			v5 = LoadFileInMem("Gendata\\Cutportr.CEL", 0);
-			v6 = "Gendata\\Cutportr.pal";
-			goto LABEL_30;
-		case WM_DIABWARPLVL:
-			v5 = LoadFileInMem("Gendata\\Cutportl.CEL", 0);
-			v6 = "Gendata\\Cutportl.pal";
-			goto LABEL_30;
-		case WM_DIABTOWNWARP:
-		case WM_DIABTWARPUP:
-			v12 = gnLevelTypeTbl[plr[myplr].plrlevel];
-			if ( !v12 )
-				goto LABEL_31;
-			v13 = v12 - 2;
-			if ( !v13 )
-			{
-LABEL_21:
-				sgpBackCel = LoadFileInMem("Gendata\\Cut2.CEL", 0);
-				LoadPalette("Gendata\\Cut2.pal");
-				progress_id = SL_BONECHAMB;
-				goto LABEL_33;
-			}
-			v14 = v13 - 1;
-			if ( v14 )
-			{
-				if ( v14 != 1 )
-					goto LABEL_33;
-LABEL_28:
-				v5 = LoadFileInMem("Gendata\\Cut4.CEL", 0);
-				v6 = "Gendata\\Cut4.pal";
-			}
-			else
-			{
-LABEL_29:
-				v5 = LoadFileInMem("Gendata\\Cut3.CEL", 0);
-				v6 = "Gendata\\Cut3.pal";
-			}
-LABEL_30:
-			sgpBackCel = v5;
-			LoadPalette(v6);
-			progress_id = 1;
-LABEL_33:
-			sgdwProgress = 0;
-			return;
-		case WM_DIABRETOWN:
-LABEL_31:
-			v5 = LoadFileInMem("Gendata\\Cuttt.CEL", 0);
-			v6 = "Gendata\\Cuttt.pal";
-			goto LABEL_30;
-		case WM_DIABNEWGAME:
-		case WM_DIABLOADGAME:
-			v5 = LoadFileInMem("Gendata\\Cutstart.CEL", 0);
-			v6 = "Gendata\\Cutstart.pal";
-			goto LABEL_30;
-		default:
-			TermMsg("Unknown progress mode");
-			goto LABEL_33;
 	}
+
+	gbSomebodyWonGameKludge = FALSE;
 }
-// 5CCB10: using guessed type char setlvlnum;

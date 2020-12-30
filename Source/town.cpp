@@ -1,1345 +1,1398 @@
-//HEADER_GOES_HERE
+/**
+ * @file town.h
+ *
+ * Implementation of functionality for rendering the town, towners and calling other render routines.
+ */
+#include "all.h"
 
-#include "../types.h"
-
-void __fastcall town_clear_upper_buf(int a1)
+/**
+ * @brief Render a black tile
+ * @brief world_draw_black_tile but limited to upper half of screen
+ * @param pBuff location in back buffer to render the tile, must be on upper half of screen
+ */
+void town_clear_upper_buf(BYTE *pBuff)
 {
-	unsigned int v1; // edi
-	signed int v2; // edx
-	signed int v3; // ebx
-	char *v4; // edi
-	signed int v5; // edx
-	signed int v6; // ebx
-	char *v7; // edi
+	assert(gpBuffer);
 
-	v1 = a1;
-	v2 = 30;
-	v3 = 1;
-	while ( v1 >= screen_buf_end )
-	{
-		v4 = (char *)(v2 + v1);
-		memset(v4, 0, 4 * v3);
-		v1 = (unsigned int)&v4[4 * v3 - 832 + v2];
-		if ( !v2 )
-		{
-			v5 = 2;
-			v6 = 15;
-			do
-			{
-				if ( v1 < screen_buf_end )
-					break;
-				v7 = (char *)(v5 + v1);
-				memset(v7, 0, 4 * v6);
-				v1 = (unsigned int)&v7[4 * v6-- - 832 + v5];
-				v5 += 2;
-			}
-			while ( v5 != 32 );
-			return;
-		}
-		v2 -= 2;
-		++v3;
+#ifdef USE_ASM
+	__asm {
+		mov		edi, pBuff
+		mov		edx, TILE_HEIGHT - 2
+		mov		ebx, 1
+		xor		eax, eax
+	label1:
+		cmp		edi, gpBufEnd
+		jb		label4
+		add		edi, edx
+		mov		ecx, ebx
+		rep stosd
+		add		edi, edx
+		sub		edi, BUFFER_WIDTH + TILE_WIDTH
+		or		edx, edx
+		jz		label2
+		sub		edx, 2
+		inc		ebx
+		jmp		label1
+	label2:
+		mov		edx, 2
+		mov		ebx, TILE_HEIGHT / 2 - 1
+	label3:
+		cmp		edi, gpBufEnd
+		jb		label4
+		add		edi, edx
+		mov		ecx, ebx
+		rep stosd
+		add		edi, edx
+		sub		edi, BUFFER_WIDTH + TILE_WIDTH
+		dec		ebx
+		add		edx, 2
+		cmp		edx, TILE_HEIGHT
+		jnz		label3
+	label4:
+		nop
 	}
+#else
+	int i, j, k;
+	BYTE *dst;
+
+	dst = pBuff;
+
+	for (i = TILE_HEIGHT - 2, j = 1; i >= 0 && dst >= gpBufEnd; i -= 2, j++, dst -= BUFFER_WIDTH + TILE_WIDTH) {
+		dst += i;
+		for (k = 0; k < 4 * j; k++)
+			*dst++ = 0;
+		dst += i;
+	}
+	for (i = 2, j = TILE_HEIGHT / 2 - 1; i != TILE_HEIGHT && dst >= gpBufEnd; i += 2, j--, dst -= BUFFER_WIDTH + TILE_WIDTH) {
+		dst += i;
+		for (k = 0; k < 4 * j; k++)
+			*dst++ = 0;
+		dst += i;
+	}
+#endif
 }
-// 69CF0C: using guessed type int screen_buf_end;
 
-void __fastcall town_clear_low_buf(int y_related)
+/**
+ * @brief Render a black tile
+ * @brief world_draw_black_tile but limited to lower half of screen
+ * @param pBuff location in back buffer to render the tile, must be on lower half of screen
+ */
+void town_clear_low_buf(BYTE *pBuff)
 {
-	unsigned int v1; // edi
-	signed int v2; // edx
-	signed int i; // ebx
-	int v4; // edi
-	char *v5; // edi
-	signed int v6; // edx
-	signed int v7; // ebx
-	int v8; // edi
-	char *v9; // edi
+	assert(gpBuffer);
 
-	v1 = y_related;
-	v2 = 30;
-	for ( i = 1; ; ++i )
-	{
-		if ( v1 < screen_buf_end )
-		{
-			v5 = (char *)(v2 + v1);
-			memset(v5, 0, 4 * i);
-			v4 = (int)&v5[4 * i + v2];
-		}
-		else
-		{
-			v4 = v1 + 64;
-		}
-		v1 = v4 - 832;
-		if ( !v2 )
-			break;
-		v2 -= 2;
+#ifdef USE_ASM
+	__asm {
+		mov		edi, pBuff
+		mov		edx, TILE_HEIGHT - 2
+		mov		ebx, 1
+		xor		eax, eax
+	label1:
+		cmp		edi, gpBufEnd
+		jb		label2
+		add		edi, TILE_WIDTH
+		jmp		label3
+	label2:
+		add		edi, edx
+		mov		ecx, ebx
+		rep stosd
+		add		edi, edx
+	label3:
+		sub		edi, BUFFER_WIDTH + TILE_WIDTH
+		or		edx, edx
+		jz		label4
+		sub		edx, 2
+		inc		ebx
+		jmp		label1
+	label4:
+		mov		edx, 2
+		mov		ebx, TILE_HEIGHT / 2 - 1
+	label5:
+		cmp		edi, gpBufEnd
+		jb		label6
+		add		edi, TILE_WIDTH
+		jmp		label7
+	label6:
+		add		edi, edx
+		mov		ecx, ebx
+		rep stosd
+		add		edi, edx
+	label7:
+		sub		edi, BUFFER_WIDTH + TILE_WIDTH
+		dec		ebx
+		add		edx, 2
+		cmp		edx, TILE_HEIGHT
+		jnz		label5
 	}
-	v6 = 2;
-	v7 = 15;
-	do
-	{
-		if ( v1 < screen_buf_end )
-		{
-			v9 = (char *)(v6 + v1);
-			memset(v9, 0, 4 * v7);
-			v8 = (int)&v9[4 * v7 + v6];
+#else
+	int i, j, k;
+	BYTE *dst;
+
+	dst = pBuff;
+
+	for (i = TILE_HEIGHT - 2, j = 1; i >= 0; i -= 2, j++, dst -= BUFFER_WIDTH + TILE_WIDTH) {
+		if (dst < gpBufEnd) {
+			dst += i;
+			for (k = 0; k < 4 * j; k++)
+				*dst++ = 0;
+			dst += i;
+		} else {
+			dst += TILE_WIDTH;
 		}
-		else
-		{
-			v8 = v1 + 64;
-		}
-		v1 = v8 - 832;
-		--v7;
-		v6 += 2;
 	}
-	while ( v6 != 32 );
+	for (i = 2, j = TILE_HEIGHT / 2 - 1; i != TILE_HEIGHT; i += 2, j--, dst -= BUFFER_WIDTH + TILE_WIDTH) {
+		if (dst < gpBufEnd) {
+			dst += i;
+			for (k = 0; k < 4 * j; k++)
+				*dst++ = 0;
+			dst += i;
+		} else {
+			dst += TILE_WIDTH;
+		}
+	}
+#endif
 }
-// 69CF0C: using guessed type int screen_buf_end;
 
-void __fastcall town_draw_clipped_e_flag(void *buffer, int x, int y, int sx, int sy)
+/**
+ * @brief Render trees on top of player, buggy disabled in 1.09
+ * @param pBuff backbuffer pointing where to render on lower part of screen
+ * @param nCel Frame number for pSpecialCels tile to draw
+ */
+void town_special_lower(BYTE *pBuff, int nCel)
 {
-	int v5; // ebx
-	char *v6; // esi
-	signed int v7; // edi
-	int v8; // eax
-	int v9; // eax
-	void *unused; // [esp+Ch] [ebp-8h]
-	char *a1; // [esp+10h] [ebp-4h]
+#if 0
+	int w;
+	BYTE *end;
 
-	v5 = x;
-	unused = buffer;
-	a1 = (char *)buffer;
-	v6 = (char *)dpiece_defs_map_1 + 32 * gendung_get_dpiece_num_from_coord(x, y);
-	v7 = 0;
-	do
-	{
-		v8 = *(unsigned short *)&v6[2 * v7];
-		level_cel_block = *(unsigned short *)&v6[2 * v7];
-		if ( v8 )
-			drawLowerScreen(a1);
-		v9 = *(unsigned short *)&v6[2 * v7 + 2];
-		level_cel_block = *(unsigned short *)&v6[2 * v7 + 2];
-		if ( v9 )
-			drawLowerScreen(a1 + 32);
-		a1 -= 24576;
-		v7 += 2;
+#ifdef USE_ASM
+	__asm {
+		mov		ebx, pSpecialCels
+		mov		eax, nCel
+		shl		eax, 2
+		add		ebx, eax
+		mov		eax, [ebx+4]
+		sub		eax, [ebx]
+		mov		end, eax
+		mov		esi, pSpecialCels
+		add		esi, [ebx]
+		mov		edi, pBuff
+		mov		eax, BUFFER_WIDTH + 64
+		mov		w, eax
+		mov		ebx, end
+		add		ebx, esi
+	label1:
+		mov		edx, 64
+	label2:
+		xor		eax, eax
+		lodsb
+		or		al, al
+		js		label7
+		sub		edx, eax
+		cmp		edi, gpBufEnd
+		jb		label3
+		add		esi, eax
+		add		edi, eax
+		jmp		label6
+	label3:
+		mov		ecx, eax
+		shr		ecx, 1
+		jnb		label4
+		movsb
+		jecxz	label6
+	label4:
+		shr		ecx, 1
+		jnb		label5
+		movsw
+		jecxz	label6
+	label5:
+		rep movsd
+	label6:
+		or		edx, edx
+		jz		label8
+		jmp		label2
+	label7:
+		neg		al
+		add		edi, eax
+		sub		edx, eax
+		jnz		label2
+	label8:
+		sub		edi, w
+		cmp		ebx, esi
+		jnz		label1
 	}
-	while ( v7 < 12 );
-	town_draw_clipped_town(unused, v5, y, sx, sy, 0);
-}
-// 69CF14: using guessed type int level_cel_block;
+#else
+	BYTE width;
+	BYTE *src, *dst;
+	DWORD *pFrameTable;
 
-void __fastcall town_draw_clipped_town(void *unused, int x, int y, int sx, int sy, int some_flag)
-{
-	unsigned int v6; // edx
-	int v7; // edi
-	char v8; // al
-	char v9; // al
-	int v10; // esi
-	int v11; // ebx
-	int v12; // esi
-	int v13; // ebx
-	int v14; // eax
-	int v15; // eax
-	int v16; // esi
-	int v17; // ebx
-	char v18; // al
-	int v19; // esi
-	int v20; // ebx
-	int v21; // edi
-	char v22; // al
-	char v23; // al
-	int v24; // esi
-	int v25; // ebx
-	int v26; // edi
-	char *v27; // [esp+Ch] [ebp-Ch]
-	int xa; // [esp+10h] [ebp-8h]
-	int v29; // [esp+14h] [ebp-4h]
+	pFrameTable = (DWORD *)pSpecialCels;
+	src = &pSpecialCels[pFrameTable[nCel]];
+	dst = pBuff;
+	end = &src[pFrameTable[nCel + 1] - pFrameTable[nCel]];
 
-	xa = x;
-	v6 = 112 * x;
-	v27 = (char *)gpBuffer + screen_y_times_768[sy] + sx;
-	v7 = v6 + y;
-	v29 = v6 + y;
-	v8 = dItem[v6 / 0x70][y];
-	if ( v8 )
-	{
-		v9 = v8 - 1;
-		v10 = v9;
-		v11 = sx - item[v10]._iAnimWidth2;
-		if ( v9 == pcursitem )
-			CelDrawHdrClrHL(
-				181,
-				v11,
-				sy,
-				(char *)item[v10]._iAnimData,
-				item[v10]._iAnimFrame,
-				item[v10]._iAnimWidth,
-				0,
-				8);
-		Cel2DrawHdrOnly(v11, sy, (char *)item[v10]._iAnimData, item[v10]._iAnimFrame, item[v10]._iAnimWidth, 0, 8);
-	}
-	if ( dFlags[0][v7] & 0x10 )
-	{
-		v12 = -1 - dMonster[x][y-1]; // -1 - *(&dword_52D204 + v7); /* check */
-		v13 = sx - towner[v12]._tAnimWidth2;
-		if ( v12 == pcursmonst )
-			CelDrawHdrClrHL(
-				166,
-				v13,
-				sy,
-				(char *)towner[v12]._tAnimData,
-				towner[v12]._tAnimFrame,
-				towner[v12]._tAnimWidth,
-				0,
-				8);
-		Cel2DrawHdrOnly(v13, sy, (char *)towner[v12]._tAnimData, towner[v12]._tAnimFrame, towner[v12]._tAnimWidth, 0, 8);
-	}
-	v14 = dMonster[0][v7];
-	if ( v14 > 0 )
-	{
-		v15 = v14 - 1;
-		v16 = v15;
-		v17 = sx - towner[v15]._tAnimWidth2;
-		if ( v15 == pcursmonst )
-			CelDrawHdrClrHL(
-				166,
-				v17,
-				sy,
-				(char *)towner[v16]._tAnimData,
-				towner[v16]._tAnimFrame,
-				towner[v16]._tAnimWidth,
-				0,
-				8);
-		Cel2DrawHdrOnly(v17, sy, (char *)towner[v16]._tAnimData, towner[v16]._tAnimFrame, towner[v16]._tAnimWidth, 0, 8);
-	}
-	if ( dFlags[0][v7] & 0x20 )
-	{
-		v18 = -1 - dPlayer[x][y-1]; // -1 - *((_BYTE *)&themeLoc[49].height + v7 + 3);
-		v19 = v18;
-		v20 = sy + plr[v19]._pyoff;
-		v21 = sx + plr[v19]._pxoff - plr[v19]._pAnimWidth2;
-		if ( v18 == pcursplr )
-			Cl2DecodeClrHL(165, v21, v20, (char *)plr[v19]._pAnimData, plr[v19]._pAnimFrame, plr[v19]._pAnimWidth, 0, 8);
-		Cl2DecodeFrm4(v21, v20, (char *)plr[v19]._pAnimData, plr[v19]._pAnimFrame, plr[v19]._pAnimWidth, 0, 8);
-		if ( some_flag && plr[v19]._peflag )
-			town_draw_clipped_e_flag(v27 - 64, xa - 1, y + 1, sx - 64, sy);
-		v7 = v29;
-	}
-	if ( dFlags[0][v7] & 4 )
-		DrawDeadPlayer(xa, y, sx, sy, 0, 8, 1);
-	v22 = dPlayer[0][v7];
-	if ( v22 > 0 )
-	{
-		v23 = v22 - 1;
-		v24 = v23;
-		v25 = sy + plr[v24]._pyoff;
-		v26 = sx + plr[v24]._pxoff - plr[v24]._pAnimWidth2;
-		if ( v23 == pcursplr )
-			Cl2DecodeClrHL(165, v26, v25, (char *)plr[v24]._pAnimData, plr[v24]._pAnimFrame, plr[v24]._pAnimWidth, 0, 8);
-		Cl2DecodeFrm4(v26, v25, (char *)plr[v24]._pAnimData, plr[v24]._pAnimFrame, plr[v24]._pAnimWidth, 0, 8);
-		if ( some_flag && plr[v24]._peflag )
-			town_draw_clipped_e_flag(v27 - 64, xa - 1, y + 1, sx - 64, sy);
-		v7 = v29;
-	}
-	if ( dFlags[0][v7] & 1 )
-		DrawClippedMissile(xa, y, sx, sy, 0, 8, 0);
-}
-// 4B8CC0: using guessed type char pcursitem;
-// 4B8CC2: using guessed type char pcursplr;
-
-void __fastcall town_draw_lower(int x, int y, int sx, int sy, int a5, int some_flag)
-{
-	int v6; // ebx
-	int *v7; // edi
-	char *v8; // esi
-	int v9; // eax
-	int v10; // eax
-	int *v11; // ebx
-	int v12; // esi
-	char *v13; // esi
-	char *v14; // edi
-	int v15; // eax
-	int v16; // eax
-	bool v17; // zf
-	int *v18; // ebx
-	char *v19; // esi
-	char *v20; // edi
-	int v21; // eax
-	char *a1; // [esp+Ch] [ebp-10h]
-	int a1a; // [esp+Ch] [ebp-10h]
-	int ya; // [esp+10h] [ebp-Ch]
-	signed int v25; // [esp+14h] [ebp-8h]
-	signed int v26; // [esp+14h] [ebp-8h]
-	signed int v27; // [esp+14h] [ebp-8h]
-	signed int xa; // [esp+18h] [ebp-4h]
-	int a5a; // [esp+2Ch] [ebp+10h]
-
-	ya = y;
-	xa = x;
-	if ( some_flag )
-	{
-		if ( y >= 0 && y < 112 && x >= 0 && x < 112 && (level_cel_block = dPiece[0][y + 112 * x]) != 0 )
-		{
-			v6 = sy;
-			v7 = &screen_y_times_768[sy];
-			a1 = &gpBuffer->row_unused_1[0].col_unused_1[*v7 + 32 + sx];
-			v25 = 1;
-			v8 = (char *)dpiece_defs_map_1 + 32 * gendung_get_dpiece_num_from_coord(x, y);
-			do
-			{
-				v9 = *(unsigned short *)&v8[2 * v25];
-				level_cel_block = *(unsigned short *)&v8[2 * v25];
-				if ( v9 )
-					drawLowerScreen(a1);
-				v25 += 2;
-				a1 -= 24576;
-			}
-			while ( v25 < 17 );
-			town_draw_clipped_town((char *)gpBuffer + *v7 + sx, xa, ya, sx, sy, 0);
-		}
-		else
-		{
-			town_clear_low_buf((int)gpBuffer + screen_y_times_768[sy] + sx);
-			v6 = sy;
-		}
-		++xa;
-		y = ya - 1;
-		sx += 64;
-		--ya;
-	}
-	else
-	{
-		v6 = sy;
-	}
-	v10 = a5 - some_flag;
-	if ( a5 - some_flag > 0 )
-	{
-		v11 = &screen_y_times_768[v6];
-		v12 = 112 * xa;
-		a5a = 112 * xa;
-		a1a = v10;
-		do
-		{
-			if ( y >= 0 && y < 112 && v12 >= 0 && v12 < 12544 && (level_cel_block = dPiece[0][v12 + y]) != 0 )
-			{
-				v13 = (char *)gpBuffer + *v11 + sx;
-				v14 = (char *)dpiece_defs_map_1 + 32 * gendung_get_dpiece_num_from_coord(xa, ya);
-				v26 = 0;
-				do
-				{
-					v15 = *(unsigned short *)&v14[2 * v26];
-					level_cel_block = *(unsigned short *)&v14[2 * v26];
-					if ( v15 )
-						drawLowerScreen(v13);
-					v16 = *(unsigned short *)&v14[2 * v26 + 2];
-					level_cel_block = *(unsigned short *)&v14[2 * v26 + 2];
-					if ( v16 )
-						drawLowerScreen(v13 + 32);
-					v26 += 2;
-					v13 -= 24576;
-				}
-				while ( v26 < 16 );
-				town_draw_clipped_town((char *)gpBuffer + *v11 + sx, xa, ya, sx, sy, 1);
-				v12 = a5a;
-			}
-			else
-			{
-				town_clear_low_buf((int)gpBuffer + *v11 + sx);
-			}
-			++xa;
-			sx += 64;
-			v12 += 112;
-			y = ya - 1;
-			v17 = a1a-- == 1;
-			a5a = v12;
-			--ya;
-		}
-		while ( !v17 );
-		v6 = sy;
-	}
-	if ( some_flag )
-	{
-		if ( y >= 0 && y < 112 && xa >= 0 && xa < 112 && (level_cel_block = dPiece[0][y + 112 * xa]) != 0 )
-		{
-			v18 = &screen_y_times_768[v6];
-			v19 = (char *)gpBuffer + *v18 + sx;
-			v20 = (char *)dpiece_defs_map_1 + 32 * gendung_get_dpiece_num_from_coord(xa, ya);
-			v27 = 0;
-			do
-			{
-				v21 = *(unsigned short *)&v20[2 * v27];
-				level_cel_block = *(unsigned short *)&v20[2 * v27];
-				if ( v21 )
-					drawLowerScreen(v19);
-				v27 += 2;
-				v19 -= 24576;
-			}
-			while ( v27 < 16 );
-			town_draw_clipped_town((char *)gpBuffer + *v18 + sx, xa, ya, sx, sy, 0);
-		}
-		else
-		{
-			town_clear_low_buf((int)gpBuffer + screen_y_times_768[v6] + sx);
-		}
-	}
-}
-// 69CF14: using guessed type int level_cel_block;
-
-void __fastcall town_draw_clipped_e_flag_2(void *buffer, int x, int y, int a4, int a5, int sx, int sy)
-{
-	int v7; // ebx
-	char *v8; // edi
-	short *v9; // esi
-	int v10; // eax
-	int v11; // eax
-	void *v12; // [esp+8h] [ebp-8h]
-	int xa; // [esp+Ch] [ebp-4h]
-	int a4a; // [esp+1Ch] [ebp+Ch]
-
-	v7 = a4;
-	xa = x;
-	v12 = buffer;
-	if ( a4 )
-		v8 = (char *)buffer + 24576 * a4;
-	else
-		v8 = (char *)buffer;
-	a4a = 0;
-	v9 = &dpiece_defs_map_1[0][0][16 * gendung_get_dpiece_num_from_coord(x, y) + 3];
-	do
-	{
-		if ( v7 <= a4a )
-		{
-			v10 = (unsigned short)*(v9 - 1);
-			level_cel_block = (unsigned short)*(v9 - 1);
-			if ( v10 )
-				drawLowerScreen(v8);
-			v11 = (unsigned short)*v9;
-			level_cel_block = (unsigned short)*v9;
-			if ( v11 )
-				drawLowerScreen(v8 + 32);
-		}
-		v8 -= 24576;
-		++a4a;
-		v9 += 2;
-	}
-	while ( a4a < 6 );
-	if ( a5 < 8 )
-		town_draw_clipped_town_2((int)v12, xa, y, v7, a5, sx, sy, 0);
-}
-// 69CF14: using guessed type int level_cel_block;
-
-void __fastcall town_draw_clipped_town_2(int x, int y, int a3, int a4, int a5, int sx, int sy, int some_flag)
-{
-	unsigned int v8; // edx
-	int v9; // ebx
-	char v10; // al
-	char v11; // al
-	int v12; // esi
-	int v13; // edi
-	int v14; // esi
-	int v15; // edi
-	int v16; // eax
-	int v17; // eax
-	int v18; // esi
-	int v19; // edi
-	char v20; // al
-	int v21; // esi
-	int v22; // ebx
-	int v23; // edi
-	char v24; // al
-	char v25; // al
-	int v26; // esi
-	int v27; // ebx
-	int v28; // edi
-	int v29; // [esp+Ch] [ebp-Ch]
-	int xa; // [esp+10h] [ebp-8h]
-	int v31; // [esp+14h] [ebp-4h]
-
-	xa = y;
-	v8 = 112 * y;
-	v9 = v8 + a3;
-	v29 = x;
-	v31 = v8 + a3;
-	v10 = dItem[v8 / 0x70][a3];
-	if ( v10 )
-	{
-		v11 = v10 - 1;
-		v12 = v11;
-		v13 = sx - item[v12]._iAnimWidth2;
-		if ( v11 == pcursitem )
-			CelDrawHdrClrHL(
-				181,
-				v13,
-				sy,
-				(char *)item[v12]._iAnimData,
-				item[v12]._iAnimFrame,
-				item[v12]._iAnimWidth,
-				a5,
-				8);
-		Cel2DrawHdrOnly(v13, sy, (char *)item[v12]._iAnimData, item[v12]._iAnimFrame, item[v12]._iAnimWidth, a5, 8);
-	}
-	if ( dFlags[0][v9] & 0x10 )
-	{
-		v14 = -1 - dMonster[x][y-1]; // -1 - *(&dword_52D204 + v9); /* check */
-		v15 = sx - towner[v14]._tAnimWidth2;
-		if ( v14 == pcursmonst )
-			CelDrawHdrClrHL(
-				166,
-				v15,
-				sy,
-				(char *)towner[v14]._tAnimData,
-				towner[v14]._tAnimFrame,
-				towner[v14]._tAnimWidth,
-				a5,
-				8);
-		Cel2DrawHdrOnly(v15, sy, (char *)towner[v14]._tAnimData, towner[v14]._tAnimFrame, towner[v14]._tAnimWidth, a5, 8);
-	}
-	v16 = dMonster[0][v9];
-	if ( v16 > 0 )
-	{
-		v17 = v16 - 1;
-		v18 = v17;
-		v19 = sx - towner[v17]._tAnimWidth2;
-		if ( v17 == pcursmonst )
-			CelDrawHdrClrHL(
-				166,
-				v19,
-				sy,
-				(char *)towner[v18]._tAnimData,
-				towner[v18]._tAnimFrame,
-				towner[v18]._tAnimWidth,
-				a5,
-				8);
-		Cel2DrawHdrOnly(v19, sy, (char *)towner[v18]._tAnimData, towner[v18]._tAnimFrame, towner[v18]._tAnimWidth, a5, 8);
-	}
-	if ( dFlags[0][v9] & 0x20 )
-	{
-		v20 = -1 - dPlayer[x][y-1]; // -1 - *((_BYTE *)&themeLoc[49].height + v9 + 3);
-		v21 = v20;
-		v22 = sy + plr[v21]._pyoff;
-		v23 = sx + plr[v21]._pxoff - plr[v21]._pAnimWidth2;
-		if ( v20 == pcursplr )
-			Cl2DecodeClrHL(165, v23, v22, (char *)plr[v21]._pAnimData, plr[v21]._pAnimFrame, plr[v21]._pAnimWidth, a5, 8);
-		Cl2DecodeFrm4(v23, v22, (char *)plr[v21]._pAnimData, plr[v21]._pAnimFrame, plr[v21]._pAnimWidth, a5, 8);
-		if ( some_flag && plr[v21]._peflag )
-			town_draw_clipped_e_flag_2((void *)(v29 - 64), xa - 1, a3 + 1, a4, a5, sx - 64, sy);
-		v9 = v31;
-	}
-	if ( dFlags[0][v9] & 4 )
-		DrawDeadPlayer(xa, a3, sx, sy, a5, 8, 1);
-	v24 = dPlayer[0][v9];
-	if ( v24 > 0 )
-	{
-		v25 = v24 - 1;
-		v26 = v25;
-		v27 = sy + plr[v26]._pyoff;
-		v28 = sx + plr[v26]._pxoff - plr[v26]._pAnimWidth2;
-		if ( v25 == pcursplr )
-			Cl2DecodeClrHL(165, v28, v27, (char *)plr[v26]._pAnimData, plr[v26]._pAnimFrame, plr[v26]._pAnimWidth, a5, 8);
-		Cl2DecodeFrm4(v28, v27, (char *)plr[v26]._pAnimData, plr[v26]._pAnimFrame, plr[v26]._pAnimWidth, a5, 8);
-		if ( some_flag && plr[v26]._peflag )
-			town_draw_clipped_e_flag_2((void *)(v29 - 64), xa - 1, a3 + 1, a4, a5, sx - 64, sy);
-		v9 = v31;
-	}
-	if ( dFlags[0][v9] & 1 )
-		DrawClippedMissile(xa, a3, sx, sy, a5, 8, 0);
-}
-// 4B8CC0: using guessed type char pcursitem;
-// 4B8CC2: using guessed type char pcursplr;
-
-void __fastcall town_draw_lower_2(int x, int y, int sx, int sy, int a5, int a6, int some_flag)
-{
-	int v7; // esi
-	int v8; // ebx
-	int *v9; // edi
-	short *v10; // eax
-	int v11; // esi
-	int v12; // eax
-	int *v13; // ebx
-	int v14; // edi
-	short *v15; // edi
-	int v16; // eax
-	int v17; // eax
-	int v18; // eax
-	bool v19; // zf
-	int *v20; // edi
-	short *v21; // ebx
-	int v22; // eax
-	short *v23; // [esp+Ch] [ebp-10h]
-	int v24; // [esp+Ch] [ebp-10h]
-	char *a1; // [esp+10h] [ebp-Ch]
-	char *a1a; // [esp+10h] [ebp-Ch]
-	char *a1b; // [esp+10h] [ebp-Ch]
-	signed int ya; // [esp+14h] [ebp-8h]
-	signed int xa; // [esp+18h] [ebp-4h]
-	signed int sxa; // [esp+24h] [ebp+8h]
-	signed int sxb; // [esp+24h] [ebp+8h]
-	signed int sxc; // [esp+24h] [ebp+8h]
-	int a5a; // [esp+2Ch] [ebp+10h]
-
-	ya = y;
-	xa = x;
-	if ( some_flag )
-	{
-		if ( y < 0 || y >= 112 || x < 0 || x >= 112 )
-		{
-			v7 = sx;
-		}
-		else
-		{
-			v7 = sx;
-			level_cel_block = dPiece[0][y + 112 * x];
-			if ( level_cel_block )
-			{
-				v8 = sy;
-				v9 = &screen_y_times_768[sy];
-				a1 = (char *)gpBuffer + *v9 + sx - 24544;
-				sxa = 0;
-				v10 = &dpiece_defs_map_1[0][0][16 * gendung_get_dpiece_num_from_coord(x, y) + 3];
-				v23 = v10;
-				do
-				{
-					if ( a6 <= sxa )
-					{
-						level_cel_block = (unsigned short)*v10;
-						if ( level_cel_block )
-							drawLowerScreen(a1);
+	for(; src != end; dst -= BUFFER_WIDTH + 64) {
+		for(w = 64; w;) {
+			width = *src++;
+			if(!(width & 0x80)) {
+				w -= width;
+				if(dst < gpBufEnd) {
+					if(width & 1) {
+						dst[0] = src[0];
+						src++;
+						dst++;
 					}
-					a1 -= 24576;
-					++sxa;
-					v10 = v23 + 2;
-					v23 += 2;
-				}
-				while ( sxa < 7 );
-				if ( 2 * a6 + 2 < 8 )
-					town_draw_clipped_town_2((int)gpBuffer + *v9 + v7, xa, ya, a6, 2 * a6 + 2, v7, sy, 0);
-				goto LABEL_16;
-			}
-		}
-		town_clear_low_buf((int)gpBuffer + screen_y_times_768[sy] + v7);
-		v8 = sy;
-LABEL_16:
-		++xa;
-		--ya;
-		v11 = v7 + 64;
-		goto LABEL_18;
-	}
-	v11 = sx;
-	v8 = sy;
-LABEL_18:
-	v12 = a5 - some_flag;
-	if ( a5 - some_flag > 0 )
-	{
-		v13 = &screen_y_times_768[v8];
-		v14 = 112 * xa;
-		a5a = 112 * xa;
-		v24 = v12;
-		do
-		{
-			if ( ya >= 0 && ya < 112 && v14 >= 0 && v14 < 12544 && (level_cel_block = dPiece[0][v14 + ya]) != 0 )
-			{
-				a1a = (char *)gpBuffer + *v13 + v11 - 24576;
-				sxb = 0;
-				v15 = &dpiece_defs_map_1[0][0][16 * gendung_get_dpiece_num_from_coord(xa, ya) + 3];
-				do
-				{
-					if ( a6 <= sxb )
-					{
-						v16 = (unsigned short)*(v15 - 1);
-						level_cel_block = (unsigned short)*(v15 - 1);
-						if ( v16 )
-							drawLowerScreen(a1a);
-						v17 = (unsigned short)*v15;
-						level_cel_block = (unsigned short)*v15;
-						if ( v17 )
-							drawLowerScreen(a1a + 32);
+					width >>= 1;
+					if(width & 1) {
+						dst[0] = src[0];
+						dst[1] = src[1];
+						src += 2;
+						dst += 2;
 					}
-					a1a -= 24576;
-					++sxb;
-					v15 += 2;
-				}
-				while ( sxb < 7 );
-				v18 = 2 * a6 + 2;
-				if ( v18 < 8 )
-					town_draw_clipped_town_2((int)gpBuffer + *v13 - 12288 * v18 + v11, xa, ya, a6, 2 * a6 + 2, v11, sy, 1);
-				v14 = a5a;
-			}
-			else
-			{
-				town_clear_low_buf((int)gpBuffer + *v13 + v11);
-			}
-			++xa;
-			v14 += 112;
-			--ya;
-			v11 += 64;
-			v19 = v24-- == 1;
-			a5a = v14;
-		}
-		while ( !v19 );
-		v8 = sy;
-	}
-	if ( some_flag )
-	{
-		if ( ya >= 0 && ya < 112 && xa >= 0 && xa < 112 && (level_cel_block = dPiece[0][ya + 112 * xa]) != 0 )
-		{
-			v20 = &screen_y_times_768[v8];
-			a1b = (char *)gpBuffer + *v20 + v11 - 24576;
-			sxc = 0;
-			v21 = &dpiece_defs_map_1[0][0][16 * gendung_get_dpiece_num_from_coord(xa, ya) + 2];
-			do
-			{
-				if ( a6 <= sxc )
-				{
-					v22 = (unsigned short)*v21;
-					level_cel_block = (unsigned short)*v21;
-					if ( v22 )
-						drawLowerScreen(a1b);
-				}
-				a1b -= 24576;
-				++sxc;
-				v21 += 2;
-			}
-			while ( sxc < 7 );
-			if ( 2 * a6 + 2 < 8 )
-				town_draw_clipped_town_2((int)gpBuffer + *v20 + v11, xa, ya, a6, 2 * a6 + 2, v11, sy, 0);
-		}
-		else
-		{
-			town_clear_low_buf((int)gpBuffer + screen_y_times_768[v8] + v11);
-		}
-	}
-}
-// 69CF14: using guessed type int level_cel_block;
-
-void __fastcall town_draw_e_flag(void *buffer, int x, int y, int a4, int dir, int sx, int sy)
-{
-	int v7; // ebx
-	char *v8; // esi
-	int v9; // edi
-	int v10; // eax
-	int v11; // eax
-	void *buffera; // [esp+Ch] [ebp-8h]
-	int *a1; // [esp+10h] [ebp-4h]
-
-	v7 = x;
-	buffera = buffer;
-	a1 = (int *)buffer;
-	v8 = (char *)dpiece_defs_map_1 + 32 * gendung_get_dpiece_num_from_coord(x, y);
-	v9 = 0;
-	do
-	{
-		if ( a4 >= v9 )
-		{
-			v10 = *(unsigned short *)&v8[4 * v9];
-			level_cel_block = *(unsigned short *)&v8[4 * v9];
-			if ( v10 )
-				drawUpperScreen(a1);
-			v11 = *(unsigned short *)&v8[4 * v9 + 2];
-			level_cel_block = *(unsigned short *)&v8[4 * v9 + 2];
-			if ( v11 )
-				drawUpperScreen(a1 + 8);
-		}
-		a1 -= 6144;
-		++v9;
-	}
-	while ( v9 < 7 );
-	town_draw_town_all(buffera, v7, y, a4, dir, sx, sy, 0);
-}
-// 69CF14: using guessed type int level_cel_block;
-
-void __fastcall town_draw_town_all(void *buffer, int x, int y, int a4, int dir, int sx, int sy, int some_flag)
-{
-	//int v9; // ebx
-	int id; // esi
-	int yy; // ebx
-	int xx; // edi
-
-	//v9 = 112 * x + y;
-	if ( dItem[x][y] )
-	{
-		id = dItem[x][y] - 1;
-		xx = sx - item[id]._iAnimWidth2;
-		if ( id == pcursitem )
-			CelDecodeClr(181, xx, sy, (char *)item[id]._iAnimData, item[id]._iAnimFrame, item[id]._iAnimWidth, 0, dir);
-		CelDrawHdrOnly(xx, sy, (char *)item[id]._iAnimData, item[id]._iAnimFrame, item[id]._iAnimWidth, 0, dir);
-	}
-	if ( dFlags[x][y] & 0x10 )
-	{
-		id = -1 - dMonster[x][y-1]; // -1 - *(&dword_52D204 + v9); /* check */
-		xx = sx - towner[id]._tAnimWidth2;
-		if ( id == pcursmonst )
-			CelDecodeClr(166, xx, sy, (char *)towner[id]._tAnimData, towner[id]._tAnimFrame, towner[id]._tAnimWidth, 0, dir);
-		CelDrawHdrOnly(xx, sy, (char *)towner[id]._tAnimData, towner[id]._tAnimFrame, towner[id]._tAnimWidth, 0, dir);
-	}
-	if ( dMonster[x][y] > 0 )
-	{
-		id = dMonster[x][y] - 1;
-		xx = sx - towner[id]._tAnimWidth2;
-		if ( id == pcursmonst )
-			CelDecodeClr(166, xx, sy, (char *)towner[id]._tAnimData, towner[id]._tAnimFrame, towner[id]._tAnimWidth, 0, dir);
-		CelDrawHdrOnly(xx, sy, (char *)towner[id]._tAnimData, towner[id]._tAnimFrame, towner[id]._tAnimWidth, 0, dir);
-	}
-	if ( dFlags[x][y] & 0x20 )
-	{
-		id = -1 - dPlayer[x][y-1]; // -1 - *((_BYTE *)&themeLoc[49].height + v9 + 3);
-		yy = sy + plr[id]._pyoff;
-		xx = sx + plr[id]._pxoff - plr[id]._pAnimWidth2;
-		if ( id == pcursplr )
-			Cl2DecodeFrm2(165, xx, yy, (char *)plr[id]._pAnimData, plr[id]._pAnimFrame, plr[id]._pAnimWidth, 0, dir);
-		Cl2DecodeFrm1(xx, yy, (char *)plr[id]._pAnimData, plr[id]._pAnimFrame, plr[id]._pAnimWidth, 0, dir);
-		if ( some_flag && plr[id]._peflag )
-			town_draw_e_flag((char *)buffer - 64, x - 1, y + 1, a4, dir, sx - 64, sy);
-	}
-	if ( dFlags[x][y] & 4 )
-		DrawDeadPlayer(x, y, sx, sy, 0, dir, 0);
-	if ( dPlayer[x][y] > 0 )
-	{
-		id = dPlayer[x][y] - 1;
-		yy = sy + plr[id]._pyoff;
-		xx = sx + plr[id]._pxoff - plr[id]._pAnimWidth2;
-		if ( id == pcursplr )
-			Cl2DecodeFrm2(165, xx, yy, (char *)plr[id]._pAnimData, plr[id]._pAnimFrame, plr[id]._pAnimWidth, 0, dir);
-		Cl2DecodeFrm1(xx, yy, (char *)plr[id]._pAnimData, plr[id]._pAnimFrame, plr[id]._pAnimWidth, 0, dir);
-		if ( some_flag && plr[id]._peflag )
-			town_draw_e_flag((char *)buffer - 64, x - 1, y + 1, a4, dir, sx - 64, sy);
-	}
-	if ( dFlags[x][y] & 1 )
-		DrawMissile(x, y, sx, sy, 0, dir, 0);
-}
-// 4B8CC0: using guessed type char pcursitem;
-// 4B8CC2: using guessed type char pcursplr;
-
-void __fastcall town_draw_upper(int x, int y, int sx, int sy, int a5, int a6, int some_flag)
-{
-	signed int v7; // ebx
-	int v8; // esi
-	int v9; // eax
-	bool v10; // zf
-	int v11; // eax
-	short *v12; // ebx
-	int v13; // eax
-	int v14; // esi
-	int v15; // edi
-	int v16; // eax
-	Screen *v17; // eax
-	char *v18; // ebx
-	char *v19; // edi
-	int v20; // eax
-	int v21; // eax
-	int v22; // eax
-	int v23; // eax
-	char *v24; // edi
-	char *v25; // ebx
-	int v26; // eax
-	int *a1; // [esp+Ch] [ebp-10h]
-	int *a1a; // [esp+Ch] [ebp-10h]
-	int dir; // [esp+10h] [ebp-Ch]
-	int ya; // [esp+14h] [ebp-8h]
-	signed int xa; // [esp+18h] [ebp-4h]
-	signed int sxa; // [esp+24h] [ebp+8h]
-	signed int sxb; // [esp+24h] [ebp+8h]
-	signed int sxc; // [esp+24h] [ebp+8h]
-	int a5a; // [esp+2Ch] [ebp+10h]
-
-	xa = x;
-	v7 = y;
-	ya = y;
-	dir = 2 * a6 + 2;
-	if ( dir > 8 )
-		dir = 8;
-	if ( some_flag )
-	{
-		if ( y < 0 || y >= 112 || x < 0 || x >= 112 )
-		{
-			v11 = sy;
-			v8 = sx;
-		}
-		else
-		{
-			v8 = sx;
-			v9 = dPiece[0][y + 112 * x];
-			level_cel_block = v9;
-			v10 = v9 == 0;
-			v11 = sy;
-			if ( !v10 )
-			{
-				a1 = (int *)&gpBuffer->row_unused_1[0].col_unused_1[sx + 32 + screen_y_times_768[sy]];
-				sxa = 0;
-				v12 = &dpiece_defs_map_1[0][0][16 * gendung_get_dpiece_num_from_coord(x, y) + 1];
-				do
-				{
-					if ( a6 >= sxa )
-					{
-						v13 = (unsigned short)*v12;
-						level_cel_block = (unsigned short)*v12;
-						if ( v13 )
-							drawUpperScreen(a1);
+					width >>= 1;
+					for(; width; width--) {
+						dst[0] = src[0];
+						dst[1] = src[1];
+						dst[2] = src[2];
+						dst[3] = src[3];
+						src += 4;
+						dst += 4;
 					}
-					a1 -= 6144;
-					++sxa;
-					v12 += 2;
+				} else {
+					src += width;
+					dst += width;
 				}
-				while ( sxa < 7 );
-				town_draw_town_all((char *)gpBuffer + v8 + screen_y_times_768[sy], xa, ya, a6, dir, v8, sy, 0);
-				v7 = ya;
-				goto LABEL_17;
+			} else {
+				width = -(char)width;
+				dst += width;
+				w -= width;
 			}
 		}
-		town_clear_upper_buf((int)gpBuffer + screen_y_times_768[v11] + v8);
-LABEL_17:
-		++xa;
-		ya = --v7;
-		v14 = v8 + 64;
-		goto LABEL_19;
 	}
-	v14 = sx;
-LABEL_19:
-	if ( a5 - some_flag > 0 )
-	{
-		a1a = (int *)(a5 - some_flag);
-		v15 = 112 * xa;
-		a5a = 112 * xa;
-		do
-		{
-			if ( v7 < 0 || v7 >= 112 || v15 < 0 || v15 >= 12544 )
-			{
-				v17 = gpBuffer;
+#endif
+#endif
+}
+
+/**
+ * @brief Render trees on top of player, buggy disabled in 1.09
+ * @param pBuff backbuffer pointing where to render on upper part of screen
+ * @param nCel Frame number for pSpecialCels tile to draw
+ */
+void town_special_upper(BYTE *pBuff, int nCel)
+{
+#if 0
+	int w;
+	BYTE *end;
+
+#ifdef USE_ASM
+	__asm {
+		mov		ebx, pSpecialCels
+		mov		eax, nCel
+		shl		eax, 2
+		add		ebx, eax
+		mov		eax, [ebx+4]
+		sub		eax, [ebx]
+		mov		end, eax
+		mov		esi, pSpecialCels
+		add		esi, [ebx]
+		mov		edi, pBuff
+		mov		eax, BUFFER_WIDTH + 64
+		mov		w, eax
+		mov		ebx, end
+		add		ebx, esi
+	label1:
+		mov		edx, 64
+	label2:
+		xor		eax, eax
+		lodsb
+		or		al, al
+		js		label6
+		sub		edx, eax
+		cmp		edi, gpBufEnd
+		jb		label8
+		mov		ecx, eax
+		shr		ecx, 1
+		jnb		label3
+		movsb
+		jecxz	label5
+	label3:
+		shr		ecx, 1
+		jnb		label4
+		movsw
+		jecxz	label5
+	label4:
+		rep movsd
+	label5:
+		or		edx, edx
+		jz		label7
+		jmp		label2
+	label6:
+		neg		al
+		add		edi, eax
+		sub		edx, eax
+		jnz		label2
+	label7:
+		sub		edi, w
+		cmp		ebx, esi
+		jnz		label1
+	label8:
+		nop
+	}
+#else
+	BYTE width;
+	BYTE *src, *dst;
+	DWORD *pFrameTable;
+
+	pFrameTable = (DWORD *)pSpecialCels;
+	src = &pSpecialCels[pFrameTable[nCel]];
+	dst = pBuff;
+	end = &src[pFrameTable[nCel + 1] - pFrameTable[nCel]];
+
+	for(; src != end; dst -= BUFFER_WIDTH + 64) {
+		for(w = 64; w;) {
+			width = *src++;
+			if(!(width & 0x80)) {
+				w -= width;
+				if(dst < gpBufEnd) {
+					return;
+				}
+				if(width & 1) {
+					dst[0] = src[0];
+					src++;
+					dst++;
+				}
+				width >>= 1;
+				if(width & 1) {
+					dst[0] = src[0];
+					dst[1] = src[1];
+					src += 2;
+					dst += 2;
+				}
+				width >>= 1;
+				for(; width; width--) {
+					dst[0] = src[0];
+					dst[1] = src[1];
+					dst[2] = src[2];
+					dst[3] = src[3];
+					src += 4;
+					dst += 4;
+				}
+			} else {
+				width = -(char)width;
+				dst += width;
+				w -= width;
 			}
-			else
-			{
-				v16 = dPiece[0][v15 + v7];
-				level_cel_block = v16;
-				v10 = v16 == 0;
-				v17 = gpBuffer;
-				if ( !v10 )
-				{
-					v18 = (char *)gpBuffer + v14 + screen_y_times_768[sy];
-					v19 = (char *)dpiece_defs_map_1 + 32 * gendung_get_dpiece_num_from_coord(xa, ya);
-					sxb = 0;
-					do
-					{
-						if ( a6 >= sxb )
-						{
-							v20 = *(unsigned short *)&v19[4 * sxb];
-							level_cel_block = *(unsigned short *)&v19[4 * sxb];
-							if ( v20 )
-								drawUpperScreen(v18);
-							v21 = *(unsigned short *)&v19[4 * sxb + 2];
-							level_cel_block = *(unsigned short *)&v19[4 * sxb + 2];
-							if ( v21 )
-								drawUpperScreen(v18 + 32);
+		}
+	}
+#endif
+#endif
+}
+
+/**
+ * This variant checks for of screen element on the lower screen
+ * This function it self causes rendering issues since it will render on top of objects on the other side of walls
+ * @brief Re render tile to workaround sorting issues with players walking east/west
+ * @param pBuff Pointer to output buffer at location sx,sy
+ * @param y dPiece coordinate
+ * @param x dPiece coordinate
+ * @param sx Backbuffer coordinate
+ * @param sy Backbuffer coordinate
+ */
+void town_draw_clipped_e_flag(BYTE *pBuff, int x, int y, int sx, int sy)
+{
+	int i;
+	BYTE *dst;
+	MICROS *pMap;
+
+	dst = pBuff;
+	pMap = &dpiece_defs_map_1[IsometricCoord(x, y)];
+
+	for (i = 0; i < 12; i += 2) {
+		level_cel_block = pMap->mt[i];
+		if (level_cel_block != 0) {
+			drawLowerScreen(dst);
+		}
+		level_cel_block = pMap->mt[i + 1];
+		if (level_cel_block != 0) {
+			drawLowerScreen(dst + TILE_WIDTH / 2);
+		}
+		dst -= BUFFER_WIDTH * TILE_HEIGHT;
+	}
+
+	town_draw_clipped_town(pBuff, x, y, sx, sy, 0);
+}
+
+/**
+ * @brief Render object sprites
+ * @param pBuff where to render to with sx,sy already applied
+ * @param sx dPiece coordinate
+ * @param sy dPiece coordinate
+ * @param dx Backbuffer coordinate
+ * @param dy Backbuffer coordinate
+ * @param eflag Should the sorting workaround be applied
+ */
+void town_draw_clipped_town(BYTE *pBuff, int sx, int sy, int dx, int dy, int eflag)
+{
+	int mi, px, py;
+	char bv;
+
+	assert(gpBuffer);
+
+	pBuff = &gpBuffer[dx + PitchTbl[dy]];
+
+	if (dItem[sx][sy] != 0) {
+		bv = dItem[sx][sy] - 1;
+		px = dx - item[bv]._iAnimWidth2;
+		if (bv == pcursitem) {
+			CelBlitOutlineSafe(181, px, dy, item[bv]._iAnimData, item[bv]._iAnimFrame, item[bv]._iAnimWidth, 0, 8);
+		}
+		CelClippedDrawSafe(px, dy, item[bv]._iAnimData, item[bv]._iAnimFrame, item[bv]._iAnimWidth, 0, 8);
+	}
+	if (dFlags[sx][sy] & BFLAG_MONSTLR) {
+		mi = -(dMonster[sx][sy - 1] + 1);
+		px = dx - towner[mi]._tAnimWidth2;
+		if (mi == pcursmonst) {
+			CelBlitOutlineSafe(166, px, dy, towner[mi]._tAnimData, towner[mi]._tAnimFrame, towner[mi]._tAnimWidth, 0, 8);
+		}
+		CelClippedDrawSafe(px, dy, towner[mi]._tAnimData, towner[mi]._tAnimFrame, towner[mi]._tAnimWidth, 0, 8);
+	}
+	if (dMonster[sx][sy] > 0) {
+		mi = dMonster[sx][sy] - 1;
+		px = dx - towner[mi]._tAnimWidth2;
+		if (mi == pcursmonst) {
+			CelBlitOutlineSafe(166, px, dy, towner[mi]._tAnimData, towner[mi]._tAnimFrame, towner[mi]._tAnimWidth, 0, 8);
+		}
+		CelClippedDrawSafe(px, dy, towner[mi]._tAnimData, towner[mi]._tAnimFrame, towner[mi]._tAnimWidth, 0, 8);
+	}
+	if (dFlags[sx][sy] & BFLAG_PLAYERLR) {
+		bv = -(dPlayer[sx][sy - 1] + 1);
+		px = dx + plr[bv]._pxoff - plr[bv]._pAnimWidth2;
+		py = dy + plr[bv]._pyoff;
+		if (bv == pcursplr) {
+			Cl2DrawOutlineSafe(165, px, py, plr[bv]._pAnimData, plr[bv]._pAnimFrame, plr[bv]._pAnimWidth, 0, 8);
+		}
+		Cl2DrawSafe(px, py, plr[bv]._pAnimData, plr[bv]._pAnimFrame, plr[bv]._pAnimWidth, 0, 8);
+		if (eflag && plr[bv]._peflag) {
+			town_draw_clipped_e_flag(pBuff - TILE_WIDTH, sx - 1, sy + 1, dx - TILE_WIDTH, dy);
+		}
+	}
+	if (dFlags[sx][sy] & BFLAG_DEAD_PLAYER) {
+		DrawDeadPlayer(sx, sy, dx, dy, 0, 8, TRUE);
+	}
+	if (dPlayer[sx][sy] > 0) {
+		bv = dPlayer[sx][sy] - 1;
+		px = dx + plr[bv]._pxoff - plr[bv]._pAnimWidth2;
+		py = dy + plr[bv]._pyoff;
+		if (bv == pcursplr) {
+			Cl2DrawOutlineSafe(165, px, py, plr[bv]._pAnimData, plr[bv]._pAnimFrame, plr[bv]._pAnimWidth, 0, 8);
+		}
+		Cl2DrawSafe(px, py, plr[bv]._pAnimData, plr[bv]._pAnimFrame, plr[bv]._pAnimWidth, 0, 8);
+		if (eflag && plr[bv]._peflag) {
+			town_draw_clipped_e_flag(pBuff - TILE_WIDTH, sx - 1, sy + 1, dx - TILE_WIDTH, dy);
+		}
+	}
+	if (dFlags[sx][sy] & BFLAG_MISSILE) {
+		DrawClippedMissile(sx, sy, dx, dy, 0, 8, 0);
+	}
+	if (dSpecial[sx][sy] != 0) {
+		town_special_lower(pBuff, dSpecial[sx][sy]);
+	}
+}
+
+/**
+ * @brief Render a row of tile
+ * @param x dPiece coordinate
+ * @param y dPiece coordinate
+ * @param sx Backbuffer coordinate
+ * @param sy Backbuffer coordinate
+ * @param chunks tile width of row
+ * @param eflag is it an even (0) or odd (1) row
+ */
+void town_draw_lower(int x, int y, int sx, int sy, int chunks, int eflag)
+{
+	int i, j;
+	BYTE *dst;
+	MICROS *pMap;
+
+	/// ASSERT: assert(gpBuffer);
+
+	if (eflag) {
+		if (y >= 0 && y < MAXDUNY && x >= 0 && x < MAXDUNX) {
+			level_cel_block = dPiece[x][y];
+			if (level_cel_block != 0) {
+				dst = &gpBuffer[sx + TILE_WIDTH / 2 + PitchTbl[sy]];
+				pMap = &dpiece_defs_map_1[IsometricCoord(x, y)];
+				for (i = 1; i < 17; i += 2) {
+					level_cel_block = pMap->mt[i];
+					if (level_cel_block != 0) {
+						drawLowerScreen(dst);
+					}
+					dst -= BUFFER_WIDTH * TILE_HEIGHT;
+				}
+				town_draw_clipped_town(&gpBuffer[sx + PitchTbl[sy]], x, y, sx, sy, 0);
+			} else {
+				town_clear_low_buf(&gpBuffer[sx + PitchTbl[sy]]);
+			}
+		} else {
+			town_clear_low_buf(&gpBuffer[sx + PitchTbl[sy]]);
+		}
+		x++;
+		y--;
+		sx += TILE_WIDTH;
+	}
+
+	for (j = 0; j < chunks - eflag; j++) {
+		if (y >= 0 && y < MAXDUNY && x >= 0 && x < MAXDUNX) {
+			level_cel_block = dPiece[x][y];
+			if (level_cel_block != 0) {
+				dst = &gpBuffer[sx + PitchTbl[sy]];
+				pMap = &dpiece_defs_map_1[IsometricCoord(x, y)];
+				for (i = 0; i < 16; i += 2) {
+					level_cel_block = pMap->mt[i];
+					if (level_cel_block != 0) {
+						drawLowerScreen(dst);
+					}
+					level_cel_block = pMap->mt[i + 1];
+					if (level_cel_block != 0) {
+						drawLowerScreen(dst + TILE_WIDTH / 2);
+					}
+					dst -= BUFFER_WIDTH * TILE_HEIGHT;
+				}
+				town_draw_clipped_town(&gpBuffer[sx + PitchTbl[sy]], x, y, sx, sy, 1);
+			} else {
+				town_clear_low_buf(&gpBuffer[sx + PitchTbl[sy]]);
+			}
+		} else {
+			town_clear_low_buf(&gpBuffer[sx + PitchTbl[sy]]);
+		}
+		x++;
+		y--;
+		sx += TILE_WIDTH;
+	}
+
+	if (eflag) {
+		if (y >= 0 && y < MAXDUNY && x >= 0 && x < MAXDUNX) {
+			level_cel_block = dPiece[x][y];
+			if (level_cel_block != 0) {
+				dst = &gpBuffer[sx + PitchTbl[sy]];
+				pMap = &dpiece_defs_map_1[IsometricCoord(x, y)];
+				for (i = 0; i < 16; i += 2) {
+					level_cel_block = pMap->mt[i];
+					if (level_cel_block != 0) {
+						drawLowerScreen(dst);
+					}
+					dst -= BUFFER_WIDTH * TILE_HEIGHT;
+				}
+				town_draw_clipped_town(&gpBuffer[sx + PitchTbl[sy]], x, y, sx, sy, 0);
+			} else {
+				town_clear_low_buf(&gpBuffer[sx + PitchTbl[sy]]);
+			}
+		} else {
+			town_clear_low_buf(&gpBuffer[sx + PitchTbl[sy]]);
+		}
+	}
+}
+
+/**
+ * This variant checks for of screen element on the lower screen
+ * This function it self causes rendering issues since it will render on top of objects on the other side of walls
+ * @brief Re render tile to workaround sorting issues with players walking east/west
+ * @param pBuff Pointer to output buffer at location sx,sy
+ * @param y dPiece coordinate
+ * @param x dPiece coordinate
+ * @param row The current row being rendered
+ * @param CelSkip chunks of cell to skip
+ * @param sx Backbuffer coordinate
+ * @param sy Backbuffer coordinate
+ */
+void town_draw_clipped_e_flag_2(BYTE *pBuff, int x, int y, int row, int CelSkip, int sx, int sy)
+{
+	int i;
+	BYTE *dst;
+	MICROS *pMap;
+
+	if (row == 0) {
+		dst = pBuff;
+	} else {
+		dst = &pBuff[BUFFER_WIDTH * TILE_HEIGHT * row];
+	}
+
+	pMap = &dpiece_defs_map_1[IsometricCoord(x, y)];
+
+	for (i = 0; i < 6; i++) {
+		if (row <= i) {
+			level_cel_block = pMap->mt[2 * i + 2];
+			if (level_cel_block != 0) {
+				drawLowerScreen(dst);
+			}
+			level_cel_block = pMap->mt[2 * i + 3];
+			if (level_cel_block != 0) {
+				drawLowerScreen(dst + TILE_WIDTH / 2);
+			}
+		}
+		dst -= BUFFER_WIDTH * TILE_HEIGHT;
+	}
+
+	if (CelSkip < 8) {
+		town_draw_clipped_town_2(pBuff, x, y, row, CelSkip, sx, sy, 0);
+	}
+}
+
+/**
+ * @brief Render object sprites, skip offscreen parts for lower screen
+ * @param pBuff where to render to with sx,sy already applied
+ * @param sx dPiece coordinate
+ * @param sy dPiece coordinate
+ * @param row The current row being rendered
+ * @param CelSkip chunks of cell to skip
+ * @param dx Backbuffer coordinate
+ * @param dy Backbuffer coordinate
+ * @param eflag Should the sorting workaround be applied
+ */
+void town_draw_clipped_town_2(BYTE *pBuff, int sx, int sy, int row, int CelSkip, int dx, int dy, int eflag)
+{
+	int mi, px, py;
+	char bv;
+
+	if (dItem[sx][sy] != 0) {
+		bv = dItem[sx][sy] - 1;
+		px = dx - item[bv]._iAnimWidth2;
+		if (bv == pcursitem) {
+			CelBlitOutlineSafe(181, px, dy, item[bv]._iAnimData, item[bv]._iAnimFrame, item[bv]._iAnimWidth, CelSkip, 8);
+		}
+		CelClippedDrawSafe(px, dy, item[bv]._iAnimData, item[bv]._iAnimFrame, item[bv]._iAnimWidth, CelSkip, 8);
+	}
+	if (dFlags[sx][sy] & BFLAG_MONSTLR) {
+		mi = -(dMonster[sx][sy - 1] + 1);
+		px = dx - towner[mi]._tAnimWidth2;
+		if (mi == pcursmonst) {
+			CelBlitOutlineSafe(166, px, dy, towner[mi]._tAnimData, towner[mi]._tAnimFrame, towner[mi]._tAnimWidth, CelSkip, 8);
+		}
+		CelClippedDrawSafe(px, dy, towner[mi]._tAnimData, towner[mi]._tAnimFrame, towner[mi]._tAnimWidth, CelSkip, 8);
+	}
+	if (dMonster[sx][sy] > 0) {
+		mi = dMonster[sx][sy] - 1;
+		px = dx - towner[mi]._tAnimWidth2;
+		if (mi == pcursmonst) {
+			CelBlitOutlineSafe(166, px, dy, towner[mi]._tAnimData, towner[mi]._tAnimFrame, towner[mi]._tAnimWidth, CelSkip, 8);
+		}
+		CelClippedDrawSafe(px, dy, towner[mi]._tAnimData, towner[mi]._tAnimFrame, towner[mi]._tAnimWidth, CelSkip, 8);
+	}
+	if (dFlags[sx][sy] & BFLAG_PLAYERLR) {
+		bv = -(dPlayer[sx][sy - 1] + 1);
+		px = dx + plr[bv]._pxoff - plr[bv]._pAnimWidth2;
+		py = dy + plr[bv]._pyoff;
+		if (bv == pcursplr) {
+			Cl2DrawOutlineSafe(165, px, py, plr[bv]._pAnimData, plr[bv]._pAnimFrame, plr[bv]._pAnimWidth, CelSkip, 8);
+		}
+		Cl2DrawSafe(px, py, plr[bv]._pAnimData, plr[bv]._pAnimFrame, plr[bv]._pAnimWidth, CelSkip, 8);
+		if (eflag && plr[bv]._peflag) {
+			town_draw_clipped_e_flag_2(pBuff - TILE_WIDTH, sx - 1, sy + 1, row, CelSkip, dx - TILE_WIDTH, dy);
+		}
+	}
+	if (dFlags[sx][sy] & BFLAG_DEAD_PLAYER) {
+		DrawDeadPlayer(sx, sy, dx, dy, CelSkip, 8, TRUE);
+	}
+	if (dPlayer[sx][sy] > 0) {
+		bv = dPlayer[sx][sy] - 1;
+		px = dx + plr[bv]._pxoff - plr[bv]._pAnimWidth2;
+		py = dy + plr[bv]._pyoff;
+		if (bv == pcursplr) {
+			Cl2DrawOutlineSafe(165, px, py, plr[bv]._pAnimData, plr[bv]._pAnimFrame, plr[bv]._pAnimWidth, CelSkip, 8);
+		}
+		Cl2DrawSafe(px, py, plr[bv]._pAnimData, plr[bv]._pAnimFrame, plr[bv]._pAnimWidth, CelSkip, 8);
+		if (eflag && plr[bv]._peflag) {
+			town_draw_clipped_e_flag_2(pBuff - TILE_WIDTH, sx - 1, sy + 1, row, CelSkip, dx - TILE_WIDTH, dy);
+		}
+	}
+	if (dFlags[sx][sy] & BFLAG_MISSILE) {
+		DrawClippedMissile(sx, sy, dx, dy, CelSkip, 8, 0);
+	}
+	if (dSpecial[sx][sy] != 0) {
+		town_special_lower(&pBuff[PitchTbl[16 * CelSkip]], dSpecial[sx][sy]);
+	}
+}
+
+/**
+ * @brief Render a row of tile, checking for overdrawing on lower part of screen
+ * @param x dPiece coordinate
+ * @param y dPiece coordinate
+ * @param sx Backbuffer coordinate
+ * @param sy Backbuffer coordinate
+ * @param chunks tile width of row
+ * @param row current row being rendered
+ * @param eflag is it an even (0) or odd (1) row
+ */
+void town_draw_lower_2(int x, int y, int sx, int sy, int chunks, int row, int eflag)
+{
+	int i, j, CelSkip;
+	BYTE *dst;
+	MICROS *pMap;
+
+	/// ASSERT: assert(gpBuffer);
+
+	CelSkip = 2 * row + 2;
+
+	if (eflag) {
+		if (y >= 0 && y < MAXDUNY && x >= 0 && x < MAXDUNX) {
+			level_cel_block = dPiece[x][y];
+			if (level_cel_block != 0) {
+				dst = &gpBuffer[sx + TILE_WIDTH / 2 - BUFFER_WIDTH * TILE_HEIGHT + PitchTbl[sy]];
+				pMap = &dpiece_defs_map_1[IsometricCoord(x, y)];
+				for (i = 0; i < 7; i++) {
+					if (row <= i) {
+						level_cel_block = pMap->mt[2 * i + 3];
+						if (level_cel_block != 0) {
+							drawLowerScreen(dst);
 						}
-						v18 -= 24576;
-						++sxb;
 					}
-					while ( sxb < 7 );
-					town_draw_town_all((char *)gpBuffer + v14 + screen_y_times_768[sy], xa, ya, a6, dir, v14, sy, 1);
-					v15 = a5a;
-					v7 = ya;
-					goto LABEL_36;
+					dst -= BUFFER_WIDTH * TILE_HEIGHT;
 				}
+				if (CelSkip < 8) {
+					town_draw_clipped_town_2(&gpBuffer[sx + PitchTbl[sy]], x, y, row, CelSkip, sx, sy, 0);
+				}
+			} else {
+				town_clear_low_buf(&gpBuffer[sx + PitchTbl[sy]]);
 			}
-			town_clear_upper_buf((int)v17 + v14 + screen_y_times_768[sy]);
-LABEL_36:
-			++xa;
-			v15 += 112;
-			--v7;
-			v14 += 64;
-			v10 = a1a == (int *)1;
-			a1a = (int *)((char *)a1a - 1);
-			a5a = v15;
-			ya = v7;
+		} else {
+			town_clear_low_buf(&gpBuffer[sx + PitchTbl[sy]]);
 		}
-		while ( !v10 );
+		x++;
+		y--;
+		sx += TILE_WIDTH;
 	}
-	if ( some_flag )
-	{
-		if ( v7 < 0 || v7 >= 112 || xa < 0 || xa >= 112 )
-		{
-			v23 = sy;
-		}
-		else
-		{
-			v22 = dPiece[0][v7 + 112 * xa];
-			level_cel_block = v22;
-			v10 = v22 == 0;
-			v23 = sy;
-			if ( !v10 )
-			{
-				v24 = (char *)gpBuffer + v14 + screen_y_times_768[sy];
-				v25 = (char *)dpiece_defs_map_1 + 32 * gendung_get_dpiece_num_from_coord(xa, v7);
-				sxc = 0;
-				do
-				{
-					if ( a6 >= sxc )
-					{
-						v26 = *(unsigned short *)&v25[4 * sxc];
-						level_cel_block = *(unsigned short *)&v25[4 * sxc];
-						if ( v26 )
-							drawUpperScreen(v24);
+
+	for (j = 0; j < chunks - eflag; j++) {
+		if (y >= 0 && y < MAXDUNY && x >= 0 && x < MAXDUNX) {
+			level_cel_block = dPiece[x][y];
+			if (level_cel_block != 0) {
+				dst = &gpBuffer[sx - BUFFER_WIDTH * TILE_HEIGHT + PitchTbl[sy]];
+				pMap = &dpiece_defs_map_1[IsometricCoord(x, y)];
+				for (i = 0; i < 7; i++) {
+					if (row <= i) {
+						level_cel_block = pMap->mt[2 * i + 2];
+						if (level_cel_block != 0) {
+							drawLowerScreen(dst);
+						}
+						level_cel_block = pMap->mt[2 * i + 3];
+						if (level_cel_block != 0) {
+							drawLowerScreen(dst + TILE_WIDTH / 2);
+						}
 					}
-					v24 -= 24576;
-					++sxc;
+					dst -= BUFFER_WIDTH * TILE_HEIGHT;
 				}
-				while ( sxc < 7 );
-				town_draw_town_all((char *)gpBuffer + v14 + screen_y_times_768[sy], xa, ya, a6, dir, v14, sy, 0);
-				return;
+				if (CelSkip < 8) {
+					town_draw_clipped_town_2(&gpBuffer[sx + PitchTbl[sy] - BUFFER_WIDTH * 16 * CelSkip], x, y, row, CelSkip, sx, sy, 1);
+				}
+			} else {
+				town_clear_low_buf(&gpBuffer[sx + PitchTbl[sy]]);
+			}
+		} else {
+			town_clear_low_buf(&gpBuffer[sx + PitchTbl[sy]]);
+		}
+		x++;
+		y--;
+		sx += TILE_WIDTH;
+	}
+
+	if (eflag) {
+		if (y >= 0 && y < MAXDUNY && x >= 0 && x < MAXDUNX) {
+			level_cel_block = dPiece[x][y];
+			if (level_cel_block != 0) {
+				dst = &gpBuffer[sx - BUFFER_WIDTH * TILE_HEIGHT + PitchTbl[sy]];
+				pMap = &dpiece_defs_map_1[IsometricCoord(x, y)];
+				for (i = 0; i < 7; i++) {
+					if (row <= i) {
+						level_cel_block = pMap->mt[2 * i + 2];
+						if (level_cel_block != 0) {
+							drawLowerScreen(dst);
+						}
+					}
+					dst -= BUFFER_WIDTH * TILE_HEIGHT;
+				}
+				if (CelSkip < 8) {
+					town_draw_clipped_town_2(&gpBuffer[sx + PitchTbl[sy]], x, y, row, CelSkip, sx, sy, 0);
+				}
+			} else {
+				town_clear_low_buf(&gpBuffer[sx + PitchTbl[sy]]);
+			}
+		} else {
+			town_clear_low_buf(&gpBuffer[sx + PitchTbl[sy]]);
+		}
+	}
+}
+
+/**
+ * This variant checks for of screen element on the upper screen
+ * This function it self causes rendering issues since it will render on top of objects on the other side of walls
+ * @brief Re render tile to workaround sorting issues with players walking east/west
+ * @param pBuff Pointer to output buffer at location sx,sy
+ * @param y dPiece coordinate
+ * @param x dPiece coordinate
+ * @param row The current row being rendered
+ * @param CelCap chunks of cell to skip
+ * @param sx Backbuffer coordinate
+ * @param sy Backbuffer coordinate
+ */
+void town_draw_e_flag(BYTE *pBuff, int x, int y, int row, int CelCap, int sx, int sy)
+{
+	int i;
+	BYTE *dst;
+	MICROS *pMap;
+
+	dst = pBuff;
+	pMap = &dpiece_defs_map_1[IsometricCoord(x, y)];
+
+	for (i = 0; i < 7; i++) {
+		if (row >= i) {
+			level_cel_block = pMap->mt[2 * i];
+			if (level_cel_block != 0) {
+				drawUpperScreen(dst);
+			}
+			level_cel_block = pMap->mt[2 * i + 1];
+			if (level_cel_block != 0) {
+				drawUpperScreen(dst + TILE_WIDTH / 2);
 			}
 		}
-		town_clear_upper_buf((int)gpBuffer + screen_y_times_768[v23] + v14);
+		dst -= BUFFER_WIDTH * TILE_HEIGHT;
 	}
-}
-// 69CF14: using guessed type int level_cel_block;
 
-void __fastcall T_DrawGame(int x, int y)
+	town_draw_town_all(pBuff, x, y, row, CelCap, sx, sy, 0);
+}
+
+/**
+ * @brief Render object sprites, skip offscreen parts for upper screen
+ * @param pBuff where to render to with sx,sx already applied
+ * @param x dPiece coordinate
+ * @param y dPiece coordinate
+ * @param row The current row being rendered
+ * @param CelCap chunks of cell to skip
+ * @param sx Backbuffer coordinate
+ * @param sy Backbuffer coordinate
+ * @param eflag Should the sorting workaround be applied
+ */
+void town_draw_town_all(BYTE *pBuff, int x, int y, int row, int CelCap, int sx, int sy, int eflag)
 {
-	int v2; // esi
-	int v3; // edi
-	int v4; // ebx
-	int v5; // ebx
-	int v6; // esi
-	int v7; // ebx
-	int v8; // esi
-	int v9; // ebx
-	int v10; // esi
-	signed int v11; // [esp+Ch] [ebp-10h]
-	signed int a6; // [esp+10h] [ebp-Ch]
-	signed int a6a; // [esp+10h] [ebp-Ch]
-	signed int a5; // [esp+14h] [ebp-8h]
-	int ya; // [esp+18h] [ebp-4h]
+	int mi, px, py;
+	char bv;
 
-	v2 = ScrollInfo._sxoff + 64;
-	v3 = x - 10;
-	ya = y - 1;
-	v4 = ScrollInfo._syoff + 175;
-	dword_5C2FF8 = 10;
-	a5 = 10;
-	scr_pix_width = 640;
-	scr_pix_height = 352;
-	dword_5C2FFC = 11;
-	v11 = 5;
-	if ( chrflag || questlog )
-	{
-		ya = y - 3;
-		v3 += 2;
-		v2 = ScrollInfo._sxoff + 352;
-		a5 = 6;
-	}
-	if ( invflag || sbookflag )
-	{
-		ya -= 2;
-		v3 += 2;
-		v2 -= 32;
-		a5 = 6;
-	}
-	switch ( ScrollInfo._sdir )
-	{
-		case DIR_SW:
-			v4 = ScrollInfo._syoff + 143;
-			--v3;
-			--ya;
-			goto LABEL_15;
-		case DIR_W:
-			v4 = ScrollInfo._syoff + 143;
-			--v3;
-			--ya;
-			goto LABEL_14;
-		case DIR_NW:
-			goto LABEL_12;
-		case DIR_N:
-			goto LABEL_14;
-		case DIR_NE:
-			goto LABEL_15;
-		case DIR_E:
-			v2 -= 64;
-			--v3;
-			++ya;
-			goto LABEL_14;
-		case DIR_SE:
-			v2 -= 64;
-			--v3;
-			++ya;
-LABEL_12:
-			++a5;
-			break;
-		case DIR_OMNI:
-			v2 -= 64;
-			v4 = ScrollInfo._syoff + 143;
-			v3 -= 2;
-LABEL_14:
-			++a5;
-LABEL_15:
-			v11 = 6;
-			break;
-		default:
-			break;
-	}
-	a6 = 0;
-	screen_buf_end = (int)gpBuffer + screen_y_times_768[160];
-	do
-	{
-		town_draw_upper(v3, ya++, v2, v4, a5, a6, 0);
-		v5 = v4 + 16;
-		v6 = v2 - 32;
-		town_draw_upper(v3++, ya, v6, v5, a5, a6, 1);
-		v2 = v6 + 32;
-		v4 = v5 + 16;
-		++a6;
-	}
-	while ( a6 < 7 );
-	screen_buf_end = (int)gpBuffer + screen_y_times_768[512];
-	if ( v11 > 0 )
-	{
-		do
-		{
-			town_draw_lower(v3, ya++, v2, v4, a5, 0);
-			v7 = v4 + 16;
-			v8 = v2 - 32;
-			town_draw_lower(v3++, ya, v8, v7, a5, 1);
-			v2 = v8 + 32;
-			v4 = v7 + 16;
-			--v11;
+	if (dItem[x][y] != 0) {
+		bv = dItem[x][y] - 1;
+		px = sx - item[bv]._iAnimWidth2;
+		if (bv == pcursitem) {
+			CelBlitOutline(181, px, sy, item[bv]._iAnimData, item[bv]._iAnimFrame, item[bv]._iAnimWidth, 0, CelCap);
 		}
-		while ( v11 );
+		/// ASSERT: assert(item[bv]._iAnimData);
+		CelClippedDraw(px, sy, item[bv]._iAnimData, item[bv]._iAnimFrame, item[bv]._iAnimWidth, 0, CelCap);
 	}
-	a6a = 0;
-	do
-	{
-		town_draw_lower_2(v3, ya++, v2, v4, a5, a6a, 0);
-		v9 = v4 + 16;
-		v10 = v2 - 32;
-		town_draw_lower_2(v3++, ya, v10, v9, a5, a6a, 1);
-		v2 = v10 + 32;
-		v4 = v9 + 16;
-		++a6a;
+	if (dFlags[x][y] & BFLAG_MONSTLR) {
+		mi = -(dMonster[x][y - 1] + 1);
+		px = sx - towner[mi]._tAnimWidth2;
+		if (mi == pcursmonst) {
+			CelBlitOutline(166, px, sy, towner[mi]._tAnimData, towner[mi]._tAnimFrame, towner[mi]._tAnimWidth, 0, CelCap);
+		}
+		/// ASSERT: assert(towner[mi]._tAnimData);
+		CelClippedDraw(px, sy, towner[mi]._tAnimData, towner[mi]._tAnimFrame, towner[mi]._tAnimWidth, 0, CelCap);
 	}
-	while ( a6a < 7 );
+	if (dMonster[x][y] > 0) {
+		mi = dMonster[x][y] - 1;
+		px = sx - towner[mi]._tAnimWidth2;
+		if (mi == pcursmonst) {
+			CelBlitOutline(166, px, sy, towner[mi]._tAnimData, towner[mi]._tAnimFrame, towner[mi]._tAnimWidth, 0, CelCap);
+		}
+		/// ASSERT: assert(towner[mi]._tAnimData);
+		CelClippedDraw(px, sy, towner[mi]._tAnimData, towner[mi]._tAnimFrame, towner[mi]._tAnimWidth, 0, CelCap);
+	}
+	if (dFlags[x][y] & BFLAG_PLAYERLR) {
+		bv = -(dPlayer[x][y - 1] + 1);
+		px = sx + plr[bv]._pxoff - plr[bv]._pAnimWidth2;
+		py = sy + plr[bv]._pyoff;
+		if (bv == pcursplr) {
+			Cl2DrawOutline(165, px, py, plr[bv]._pAnimData, plr[bv]._pAnimFrame, plr[bv]._pAnimWidth, 0, CelCap);
+		}
+		/// ASSERT: assert(plr[bv]._pAnimData);
+		Cl2Draw(px, py, plr[bv]._pAnimData, plr[bv]._pAnimFrame, plr[bv]._pAnimWidth, 0, CelCap);
+		if (eflag && plr[bv]._peflag) {
+			town_draw_e_flag(pBuff - TILE_WIDTH, x - 1, y + 1, row, CelCap, sx - TILE_WIDTH, sy);
+		}
+	}
+	if (dFlags[x][y] & BFLAG_DEAD_PLAYER) {
+		DrawDeadPlayer(x, y, sx, sy, 0, CelCap, FALSE);
+	}
+	if (dPlayer[x][y] > 0) {
+		bv = dPlayer[x][y] - 1;
+		px = sx + plr[bv]._pxoff - plr[bv]._pAnimWidth2;
+		py = sy + plr[bv]._pyoff;
+		if (bv == pcursplr) {
+			Cl2DrawOutline(165, px, py, plr[bv]._pAnimData, plr[bv]._pAnimFrame, plr[bv]._pAnimWidth, 0, CelCap);
+		}
+		/// ASSERT: assert(plr[bv]._pAnimData);
+		Cl2Draw(px, py, plr[bv]._pAnimData, plr[bv]._pAnimFrame, plr[bv]._pAnimWidth, 0, CelCap);
+		if (eflag && plr[bv]._peflag) {
+			town_draw_e_flag(pBuff - TILE_WIDTH, x - 1, y + 1, row, CelCap, sx - TILE_WIDTH, sy);
+		}
+	}
+	if (dFlags[x][y] & BFLAG_MISSILE) {
+		DrawMissile(x, y, sx, sy, 0, CelCap, FALSE);
+	}
+	if (dSpecial[x][y] != 0) {
+		town_special_upper(pBuff, dSpecial[x][y]);
+	}
 }
-// 4B8968: using guessed type int sbookflag;
-// 5C2FF8: using guessed type int dword_5C2FF8;
-// 5C2FFC: using guessed type int dword_5C2FFC;
-// 5C3000: using guessed type int scr_pix_width;
-// 5C3004: using guessed type int scr_pix_height;
-// 69BD04: using guessed type int questlog;
-// 69CF0C: using guessed type int screen_buf_end;
 
-void __fastcall T_DrawZoom(int x, int y)
+/**
+ * @brief Render a row of tile, checking for overdrawing on upper part of screen
+ * @param x dPiece coordinate
+ * @param y dPiece coordinate
+ * @param sx Backbuffer coordinate
+ * @param sy Backbuffer coordinate
+ * @param chunks tile width of row
+ * @param row current row being rendered
+ * @param eflag is it an even (0) or odd (1) row
+ */
+void town_draw_upper(int x, int y, int sx, int sy, int chunks, int row, int eflag)
 {
-	int v2; // edi
-	int v3; // ebx
-	int v4; // esi
-	int v5; // esi
-	int v6; // edi
-	int v7; // esi
-	int v8; // edi
-	int v9; // esi
-	int v10; // edi
-	_WORD *v11; // edi
-	char *v12; // esi
-	char *v13; // ebx
-	signed int v14; // edx
-	signed int v15; // ecx
-	short v16; // ax
-	int v17; // eax
-	signed int v18; // [esp+Ch] [ebp-10h]
-	signed int v19; // [esp+Ch] [ebp-10h]
-	signed int a6; // [esp+10h] [ebp-Ch]
-	signed int a6a; // [esp+10h] [ebp-Ch]
-	int a6b; // [esp+10h] [ebp-Ch]
-	signed int a5; // [esp+14h] [ebp-8h]
-	int a5a; // [esp+14h] [ebp-8h]
-	int ya; // [esp+18h] [ebp-4h]
+	int i, j, CelCap;
+	BYTE *dst;
+	MICROS *pMap;
 
-	v18 = 0;
-	v2 = ScrollInfo._sxoff + 64;
-	dword_5C2FF8 = 6;
-	dword_5C2FFC = 6;
-	v3 = x - 6;
-	a5 = 6;
-	v4 = ScrollInfo._syoff + 143;
-	ya = y - 1;
-	scr_pix_width = 384;
-	scr_pix_height = 192;
-	switch ( ScrollInfo._sdir )
-	{
-		case DIR_SW:
-			v4 = ScrollInfo._syoff + 111;
-			v3 = x - 7;
-			ya = y - 2;
-			goto LABEL_9;
-		case DIR_W:
-			v4 = ScrollInfo._syoff + 111;
-			v3 = x - 7;
-			ya = y - 2;
-			goto LABEL_8;
-		case DIR_NW:
-			goto LABEL_6;
-		case DIR_N:
-			goto LABEL_8;
-		case DIR_NE:
-			goto LABEL_9;
-		case DIR_E:
-			v2 = ScrollInfo._sxoff;
-			v3 = x - 7;
-			ya = y;
-			goto LABEL_8;
-		case DIR_SE:
-			v2 = ScrollInfo._sxoff;
-			v3 = x - 7;
-			ya = y;
-LABEL_6:
-			a5 = 7;
-			break;
-		case DIR_OMNI:
-			v2 = ScrollInfo._sxoff;
-			v4 = ScrollInfo._syoff + 111;
-			v3 = x - 8;
-LABEL_8:
-			a5 = 7;
-LABEL_9:
-			v18 = 1;
-			break;
-		default:
-			break;
+	/// ASSERT: assert(gpBuffer);
+
+	CelCap = 2 * row + 2;
+	if (CelCap > 8) {
+		CelCap = 8;
 	}
-	a6 = 0;
-	screen_buf_end = (int)gpBuffer + screen_y_times_768[143];
-	do
-	{
-		town_draw_upper(v3, ya++, v2, v4, a5, a6, 0);
-		v5 = v4 + 16;
-		v6 = v2 - 32;
-		town_draw_upper(v3++, ya, v6, v5, a5, a6, 1);
-		v2 = v6 + 32;
-		v4 = v5 + 16;
-		++a6;
-	}
-	while ( a6 < 7 );
-	screen_buf_end = (int)gpBuffer + screen_y_times_768[320];
-	if ( v18 > 0 )
-	{
-		do
-		{
-			town_draw_lower(v3, ya++, v2, v4, a5, 0);
-			v7 = v4 + 16;
-			v8 = v2 - 32;
-			town_draw_lower(v3++, ya, v8, v7, a5, 1);
-			v2 = v8 + 32;
-			v4 = v7 + 16;
-			--v18;
+
+	if (eflag) {
+		if (y >= 0 && y < MAXDUNY && x >= 0 && x < MAXDUNX) {
+			level_cel_block = dPiece[x][y];
+			if (level_cel_block != 0) {
+				dst = &gpBuffer[sx + TILE_WIDTH / 2 + PitchTbl[sy]];
+				pMap = &dpiece_defs_map_1[IsometricCoord(x, y)];
+				for (i = 0; i < 7; i++) {
+					if (row >= i) {
+						level_cel_block = pMap->mt[2 * i + 1];
+						if (level_cel_block != 0) {
+							drawUpperScreen(dst);
+						}
+					}
+					dst -= BUFFER_WIDTH * TILE_HEIGHT;
+				}
+				town_draw_town_all(&gpBuffer[sx + PitchTbl[sy]], x, y, row, CelCap, sx, sy, 0);
+			} else {
+				town_clear_upper_buf(&gpBuffer[sx + PitchTbl[sy]]);
+			}
+		} else {
+			town_clear_upper_buf(&gpBuffer[sx + PitchTbl[sy]]);
 		}
-		while ( v18 );
+		x++;
+		y--;
+		sx += TILE_WIDTH;
 	}
-	a6a = 0;
-	do
-	{
-		town_draw_lower_2(v3, ya++, v2, v4, a5, a6a, 0);
-		v9 = v4 + 16;
-		v10 = v2 - 32;
-		town_draw_lower_2(v3++, ya, v10, v9, a5, a6a, 1);
-		v2 = v10 + 32;
-		v4 = v9 + 16;
-		++a6a;
-	}
-	while ( a6a < 7 );
-	if ( chrflag || questlog )
-	{
-		a5a = 392064;
-		goto LABEL_23;
-	}
-	if ( invflag || sbookflag )
-	{
-		a5a = 391744;
-LABEL_23:
-		a6b = 245168;
-		v19 = 160;
-		goto LABEL_24;
-	}
-	a6b = 245088;
-	a5a = 391744;
-	v19 = 320;
-LABEL_24:
-	v11 = (_WORD *)((char *)gpBuffer + a5a);
-	v12 = (char *)gpBuffer + a6b;
-	v13 = &gpBuffer->row_unused_1[1].col_unused_1[a5a];
-	v14 = 176;
-	do
-	{
-		v15 = v19;
-		do
-		{
-			_LOBYTE(v16) = *v12++;
-			_HIBYTE(v16) = v16;
-			*v11 = v16;
-			*(_WORD *)v13 = v16;
-			++v11;
-			v13 += 2;
-			--v15;
+
+	for (j = 0; j < chunks - eflag; j++) {
+		if (y >= 0 && y < MAXDUNY && x >= 0 && x < MAXDUNX) {
+			level_cel_block = dPiece[x][y];
+			if (level_cel_block != 0) {
+				dst = &gpBuffer[sx + PitchTbl[sy]];
+				pMap = &dpiece_defs_map_1[IsometricCoord(x, y)];
+				for (i = 0; i < 7; i++) {
+					if (row >= i) {
+						level_cel_block = pMap->mt[2 * i];
+						if (level_cel_block != 0) {
+							drawUpperScreen(dst);
+						}
+						level_cel_block = pMap->mt[2 * i + 1];
+						if (level_cel_block != 0) {
+							drawUpperScreen(dst + TILE_WIDTH / 2);
+						}
+					}
+					dst -= BUFFER_WIDTH * TILE_HEIGHT;
+				}
+				town_draw_town_all(&gpBuffer[sx + PitchTbl[sy]], x, y, row, CelCap, sx, sy, 1);
+			} else {
+				town_clear_upper_buf(&gpBuffer[sx + PitchTbl[sy]]);
+			}
+		} else {
+			town_clear_upper_buf(&gpBuffer[sx + PitchTbl[sy]]);
 		}
-		while ( v15 );
-		v12 += -v19 - 768;
-		v17 = 2 * (v19 + 768);
-		v13 -= v17;
-		v11 = (_WORD *)((char *)v11 - v17);
-		--v14;
+		x++;
+		y--;
+		sx += TILE_WIDTH;
 	}
-	while ( v14 );
+
+	if (eflag) {
+		if (y >= 0 && y < MAXDUNY && x >= 0 && x < MAXDUNX) {
+			level_cel_block = dPiece[x][y];
+			if (level_cel_block != 0) {
+				dst = &gpBuffer[sx + PitchTbl[sy]];
+				pMap = &dpiece_defs_map_1[IsometricCoord(x, y)];
+				for (i = 0; i < 7; i++) {
+					if (row >= i) {
+						level_cel_block = pMap->mt[2 * i];
+						if (level_cel_block != 0) {
+							drawUpperScreen(dst);
+						}
+					}
+					dst -= BUFFER_WIDTH * TILE_HEIGHT;
+				}
+				town_draw_town_all(&gpBuffer[sx + PitchTbl[sy]], x, y, row, CelCap, sx, sy, 0);
+			} else {
+				town_clear_upper_buf(&gpBuffer[sx + PitchTbl[sy]]);
+			}
+		} else {
+			town_clear_upper_buf(&gpBuffer[sx + PitchTbl[sy]]);
+		}
+	}
 }
-// 4B8968: using guessed type int sbookflag;
-// 5C2FF8: using guessed type int dword_5C2FF8;
-// 5C2FFC: using guessed type int dword_5C2FFC;
-// 5C3000: using guessed type int scr_pix_width;
-// 5C3004: using guessed type int scr_pix_height;
-// 69BD04: using guessed type int questlog;
-// 69CF0C: using guessed type int screen_buf_end;
 
-void __fastcall T_DrawView(int StartX, int StartY)
+/**
+ * @brief Configure render and process screen rows
+ * @param x Center of view in dPiece coordinate
+ * @param y Center of view in dPiece coordinate
+ */
+void T_DrawGame(int x, int y)
+{
+	int i, sx, sy, chunks, blocks;
+
+	ViewDX = SCREEN_WIDTH;
+	ViewDY = VIEWPORT_HEIGHT;
+	ViewBX = SCREEN_WIDTH / TILE_WIDTH;
+	ViewBY = VIEWPORT_HEIGHT / TILE_HEIGHT;
+
+	sx = ScrollInfo._sxoff + TILE_WIDTH;
+	sy = ScrollInfo._syoff + SCREEN_Y + (TILE_HEIGHT / 2 - 1);
+	x -= SCREEN_WIDTH / TILE_WIDTH;
+	y--;
+	chunks = SCREEN_WIDTH / TILE_WIDTH;
+	blocks = 5;
+
+	if (chrflag || questlog) {
+		x += 2;
+		y -= 2;
+		sx += (SCREEN_WIDTH / 2) - TILE_WIDTH / 2;
+		chunks = 6;
+	}
+	if (invflag || sbookflag) {
+		x += 2;
+		y -= 2;
+		sx -= TILE_WIDTH / 2;
+		chunks = 6;
+	}
+
+	switch (ScrollInfo._sdir) {
+	case SDIR_NONE:
+		break;
+	case SDIR_N:
+		sy -= TILE_HEIGHT;
+		x--;
+		y--;
+		blocks++;
+		break;
+	case SDIR_NE:
+		sy -= TILE_HEIGHT;
+		x--;
+		y--;
+		chunks++;
+		blocks++;
+		break;
+	case SDIR_E:
+		chunks++;
+		break;
+	case SDIR_SE:
+		chunks++;
+		blocks++;
+		break;
+	case SDIR_S:
+		blocks++;
+		break;
+	case SDIR_SW:
+		sx -= TILE_WIDTH;
+		x--;
+		y++;
+		chunks++;
+		blocks++;
+		break;
+	case SDIR_W:
+		sx -= TILE_WIDTH;
+		x--;
+		y++;
+		chunks++;
+		break;
+	case SDIR_NW:
+		sx -= TILE_WIDTH;
+		sy -= TILE_HEIGHT;
+		x -= 2;
+		chunks++;
+		blocks++;
+		break;
+	}
+
+	/// ASSERT: assert(gpBuffer);
+	gpBufEnd = &gpBuffer[PitchTbl[SCREEN_Y]];
+	for (i = 0; i < 7; i++) {
+		town_draw_upper(x, y, sx, sy, chunks, i, 0);
+		y++;
+		sx -= TILE_WIDTH / 2;
+		sy += TILE_HEIGHT / 2;
+		town_draw_upper(x, y, sx, sy, chunks, i, 1);
+		x++;
+		sx += TILE_WIDTH / 2;
+		sy += TILE_HEIGHT / 2;
+	}
+	/// ASSERT: assert(gpBuffer);
+	gpBufEnd = &gpBuffer[PitchTbl[VIEWPORT_HEIGHT + SCREEN_Y]];
+	for (i = 0; i < blocks; i++) {
+		town_draw_lower(x, y, sx, sy, chunks, 0);
+		y++;
+		sx -= TILE_WIDTH / 2;
+		sy += TILE_HEIGHT / 2;
+		town_draw_lower(x, y, sx, sy, chunks, 1);
+		x++;
+		sx += TILE_WIDTH / 2;
+		sy += TILE_HEIGHT / 2;
+	}
+	for (i = 0; i < 7; i++) {
+		town_draw_lower_2(x, y, sx, sy, chunks, i, 0);
+		y++;
+		sx -= TILE_WIDTH / 2;
+		sy += TILE_HEIGHT / 2;
+		town_draw_lower_2(x, y, sx, sy, chunks, i, 1);
+		x++;
+		sx += TILE_WIDTH / 2;
+		sy += TILE_HEIGHT / 2;
+	}
+}
+
+/**
+ * @brief Configure render for zoomed view and process screen rows
+ * @param x Center of view in dPiece coordinate
+ * @param y Center of view in dPiece coordinate
+ */
+void T_DrawZoom(int x, int y)
+{
+	int i, sx, sy, chunks, blocks;
+	int wdt, nSrcOff, nDstOff;
+
+	ViewDX = ZOOM_WIDTH;
+	ViewDY = ZOOM_HEIGHT - TILE_HEIGHT;
+	ViewBX = ZOOM_WIDTH / TILE_WIDTH;
+	ViewBY = (ZOOM_HEIGHT - TILE_HEIGHT) / TILE_HEIGHT;
+
+	sx = ScrollInfo._sxoff + SCREEN_X;
+	sy = ScrollInfo._syoff + SCREEN_Y - (TILE_HEIGHT / 2 + 1);
+	x -= ZOOM_WIDTH / TILE_WIDTH;
+	y--;
+	chunks = ZOOM_WIDTH / TILE_WIDTH;
+	blocks = 0;
+
+	switch (ScrollInfo._sdir) {
+	case SDIR_NONE:
+		break;
+	case SDIR_N:
+		sy -= TILE_HEIGHT;
+		x--;
+		y--;
+		blocks++;
+		break;
+	case SDIR_NE:
+		sy -= TILE_HEIGHT;
+		x--;
+		y--;
+		chunks++;
+		blocks++;
+		break;
+	case SDIR_E:
+		chunks++;
+		break;
+	case SDIR_SE:
+		chunks++;
+		blocks++;
+		break;
+	case SDIR_S:
+		blocks++;
+		break;
+	case SDIR_SW:
+		sx -= TILE_WIDTH;
+		x--;
+		y++;
+		chunks++;
+		blocks++;
+		break;
+	case SDIR_W:
+		sx -= TILE_WIDTH;
+		x--;
+		y++;
+		chunks++;
+		break;
+	case SDIR_NW:
+		sx -= TILE_WIDTH;
+		sy -= TILE_HEIGHT;
+		x -= 2;
+		chunks++;
+		blocks++;
+		break;
+	}
+
+	assert(gpBuffer);
+	gpBufEnd = &gpBuffer[PitchTbl[-17 + SCREEN_Y]];
+	for (i = 0; i < 7; i++) {
+		town_draw_upper(x, y, sx, sy, chunks, i, 0);
+		y++;
+		sx -= TILE_WIDTH / 2;
+		sy += TILE_HEIGHT / 2;
+		town_draw_upper(x, y, sx, sy, chunks, i, 1);
+		x++;
+		sx += TILE_WIDTH / 2;
+		sy += TILE_HEIGHT / 2;
+	}
+	assert(gpBuffer);
+	gpBufEnd = &gpBuffer[PitchTbl[160 + SCREEN_Y]];
+	for (i = 0; i < blocks; i++) {
+		town_draw_lower(x, y, sx, sy, chunks, 0);
+		y++;
+		sx -= TILE_WIDTH / 2;
+		sy += TILE_HEIGHT / 2;
+		town_draw_lower(x, y, sx, sy, chunks, 1);
+		x++;
+		sx += TILE_WIDTH / 2;
+		sy += TILE_HEIGHT / 2;
+	}
+	for (i = 0; i < 7; i++) {
+		town_draw_lower_2(x, y, sx, sy, chunks, i, 0);
+		y++;
+		sx -= TILE_WIDTH / 2;
+		sy += TILE_HEIGHT / 2;
+		town_draw_lower_2(x, y, sx, sy, chunks, i, 1);
+		x++;
+		sx += TILE_WIDTH / 2;
+		sy += TILE_HEIGHT / 2;
+	}
+
+	if (chrflag || questlog) {
+		nSrcOff = SCREENXY(TILE_WIDTH / 2 + SPANEL_WIDTH / 4, VIEWPORT_HEIGHT / 2 - (TILE_HEIGHT / 2 + 1));
+		nDstOff = SCREENXY(SPANEL_WIDTH, VIEWPORT_HEIGHT - 2);
+		wdt = (SCREEN_WIDTH - SPANEL_WIDTH) / 2;
+	} else if (invflag || sbookflag) {
+		nSrcOff = SCREENXY(TILE_WIDTH / 2 + SPANEL_WIDTH / 4, VIEWPORT_HEIGHT / 2 - (TILE_HEIGHT / 2 + 1));
+		nDstOff = SCREENXY(0, VIEWPORT_HEIGHT - 2);
+		wdt = (SCREEN_WIDTH - SPANEL_WIDTH) / 2;
+	} else {
+		nSrcOff = SCREENXY(TILE_WIDTH / 2, VIEWPORT_HEIGHT / 2 - (TILE_HEIGHT / 2 + 1));
+		nDstOff = SCREENXY(0, VIEWPORT_HEIGHT - 2);
+		wdt = SCREEN_WIDTH / 2;
+	}
+
+	assert(gpBuffer);
+
+#ifdef USE_ASM
+	__asm {
+		mov		esi, gpBuffer
+		mov		edx, nDstOff
+		mov		edi, esi
+		mov		ecx, nSrcOff
+		add		edi, edx
+		add		esi, ecx
+		mov		ebx, edi
+		add		ebx, BUFFER_WIDTH
+		mov		edx, VIEWPORT_HEIGHT / 2
+	label1:
+		mov		ecx, wdt
+	label2:
+		mov		al, [esi]
+		inc		esi
+		mov		ah, al
+		mov		[edi], ax
+		mov		[ebx], ax
+		add		edi, 2
+		add		ebx, 2
+		dec		ecx
+		jnz		label2
+		mov		eax, BUFFER_WIDTH
+		add		eax, wdt
+		sub		esi, eax
+		add		eax, eax
+		sub		ebx, eax
+		sub		edi, eax
+		dec		edx
+		jnz		label1
+	}
+#else
+	int hgt;
+	BYTE *src, *dst1, *dst2;
+
+	src = &gpBuffer[nSrcOff];
+	dst1 = &gpBuffer[nDstOff];
+	dst2 = &gpBuffer[nDstOff + BUFFER_WIDTH];
+
+	for (hgt = VIEWPORT_HEIGHT / 2; hgt != 0; hgt--, src -= BUFFER_WIDTH + wdt, dst1 -= 2 * (BUFFER_WIDTH + wdt), dst2 -= 2 * (BUFFER_WIDTH + wdt)) {
+		for (i = wdt; i != 0; i--) {
+			*dst1++ = *src;
+			*dst1++ = *src;
+			*dst2++ = *src;
+			*dst2++ = *src;
+			src++;
+		}
+	}
+#endif
+}
+
+/**
+ * Mostly like DrawView but enables stores and lacks death screen
+ * @brief Start rendering of screen, town variation
+ * @param StartX Center of view in dPiece coordinate
+ * @param StartY Center of view in dPiece coordinate
+ */
+void T_DrawView(int StartX, int StartY)
 {
 	light_table_index = 0;
 	cel_transparency_active = 0;
-	if ( zoomflag )
+	if (zoomflag) {
 		T_DrawGame(StartX, StartY);
-	else
+	} else {
 		T_DrawZoom(StartX, StartY);
-	if ( automapflag )
-		DrawAutomap();
-	if ( stextflag && !qtextflag )
-		DrawSText();
-	if ( invflag )
-	{
-		DrawInv();
 	}
-	else if ( sbookflag )
-	{
+	if (automapflag) {
+		DrawAutomap();
+	}
+	if (stextflag && !qtextflag)
+		DrawSText();
+	if (invflag) {
+		DrawInv();
+	} else if (sbookflag) {
 		DrawSpellBook();
 	}
+
 	DrawDurIcon();
-	if ( chrflag )
-	{
+
+	if (chrflag) {
 		DrawChr();
-	}
-	else if ( questlog )
-	{
+	} else if (questlog) {
 		DrawQuestLog();
-	}
-	else if ( plr[myplr]._pStatPts && !spselflag )
-	{
+	} else if (plr[myplr]._pStatPts != 0 && !spselflag) {
 		DrawLevelUpIcon();
 	}
-	if ( uitemflag )
+	if (uitemflag) {
 		DrawUniqueInfo();
-	if ( qtextflag )
+	}
+	if (qtextflag) {
 		DrawQText();
-	if ( spselflag )
+	}
+	if (spselflag) {
 		DrawSpellList();
-	if ( dropGoldFlag )
+	}
+	if (dropGoldFlag) {
 		DrawGoldSplit(dropGoldValue);
-	if ( helpflag )
+	}
+	if (helpflag) {
 		DrawHelp();
-	if ( msgflag )
+	}
+	if (msgflag) {
 		DrawDiabloMsg();
-	if ( PauseMode && !deathflag )
+	}
+	if (PauseMode != 0 && !deathflag) {
 		gmenu_draw_pause();
+	}
+
 	DrawPlrMsg();
 	gmenu_draw();
 	doom_draw();
@@ -1347,379 +1400,507 @@ void __fastcall T_DrawView(int StartX, int StartY)
 	DrawLifeFlask();
 	DrawManaFlask();
 }
-// 4B84DC: using guessed type int dropGoldFlag;
-// 4B8968: using guessed type int sbookflag;
-// 4B8C98: using guessed type int spselflag;
-// 52569C: using guessed type int zoomflag;
-// 525740: using guessed type int PauseMode;
-// 52B9F1: using guessed type char msgflag;
-// 646D00: using guessed type char qtextflag;
-// 69BD04: using guessed type int questlog;
-// 69BEF8: using guessed type int light_table_index;
-// 69CF94: using guessed type int cel_transparency_active;
-// 6AA705: using guessed type char stextflag;
 
-void __cdecl town_init_dpiece_defs_map()
+/**
+ * @brief Build tile columns
+ */
+void SetTownMicros()
 {
-	int (*v0)[112]; // ebx
-	int v1; // ebp
-	int v2; // esi
-	char *v3; // edi
-	int v4; // ecx
-	signed int v5; // eax
-	int (*v6)[112]; // [esp+10h] [ebp-8h]
-	int y; // [esp+14h] [ebp-4h]
+	int i, x, y, lv;
+	WORD *pPiece;
+	MICROS *pMap;
 
-	y = 0;
-	v6 = dPiece;
-	do
-	{
-		v0 = v6;
-		v1 = 0;
-		do
-		{
-			v2 = (*v0)[0];
-			v3 = (char *)dpiece_defs_map_1 + 32 * gendung_get_dpiece_num_from_coord(v1, y);
-			if ( v2 )
-			{
-				v4 = 32 * v2 + *(_DWORD *)&dpiece_defs[0].blocks - 32;
-				v5 = 0;
-				do
-				{
-					*(_WORD *)&v3[2 * v5] = *(_WORD *)(v4 + 2 * ((v5 & 1) - (v5 & 0xE)) + 28);
-					++v5;
+	for (y = 0; y < MAXDUNY; y++) {
+		for (x = 0; x < MAXDUNX; x++) {
+			lv = dPiece[x][y];
+			pMap = &dpiece_defs_map_1[IsometricCoord(x, y)];
+			if (lv != 0) {
+				lv--;
+				pPiece = (WORD *)&pLevelPieces[32 * lv];
+				for (i = 0; i < 16; i++) {
+					pMap->mt[i] = pPiece[(i & 1) + 16 - 2 - (i & 0xE)];
 				}
-				while ( v5 < 16 );
-			}
-			else
-			{
-				memset(v3, 0, 0x20u);
-			}
-			++v1;
-			++v0;
-		}
-		while ( v1 < 112 );
-		v6 = (int (*)[112])((char *)v6 + 4);
-		++y;
-	}
-	while ( (signed int)v6 < (signed int)dPiece[1] );
-	if ( zoomflag )
-	{
-		scr_pix_width = 640;
-		scr_pix_height = 352;
-		dword_5C2FF8 = 10;
-		dword_5C2FFC = 11;
-	}
-	else
-	{
-		scr_pix_width = 384;
-		scr_pix_height = 224;
-		dword_5C2FF8 = 6;
-		dword_5C2FFC = 7;
-	}
-}
-// 52569C: using guessed type int zoomflag;
-// 5C2FF8: using guessed type int dword_5C2FF8;
-// 5C2FFC: using guessed type int dword_5C2FFC;
-// 5C3000: using guessed type int scr_pix_width;
-// 5C3004: using guessed type int scr_pix_height;
-
-void __fastcall T_FillSector(unsigned char *P3Tiles, unsigned char *pSector, int xi, int yi, int w, int h) /* check 7 params: int AddSec */
-{
-	int v7; // ebx
-	int v8; // edx
-	int v9; // edi
-	int *v10; // ecx
-	int v11; // eax
-	unsigned char *v12; // esi
-	unsigned short v13; // ax
-	int v14; // eax
-	int v15; // [esp+4h] [ebp-14h]
-	int v16; // [esp+8h] [ebp-10h]
-	unsigned char *v17; // [esp+Ch] [ebp-Ch]
-	unsigned char *v18; // [esp+10h] [ebp-8h]
-	signed int v19; // [esp+14h] [ebp-4h]
-	int a4; // [esp+24h] [ebp+Ch]
-	int a6; // [esp+2Ch] [ebp+14h]
-
-	v7 = h;
-	v17 = pSector;
-	v8 = yi;
-	v18 = P3Tiles;
-	v19 = 4;
-	if ( h > 0 )
-	{
-		do
-		{
-			v9 = w;
-			if ( w > 0 )
-			{
-				v10 = &dPiece[1][v8 + 112 * xi];
-				do
-				{
-					v11 = *(unsigned short *)&v17[v19];
-					if ( (_WORD)v11 )
-					{
-						v12 = &v18[8 * (v11 - 1)];
-						v13 = *(_WORD *)v12;
-						v12 += 2;
-						v14 = v13 + 1;
-						a4 = v14;
-						_LOWORD(v14) = *(_WORD *)v12;
-						v12 += 2;
-						a6 = ++v14;
-						_LOWORD(v14) = *(_WORD *)v12;
-						v16 = ++v14;
-						_LOWORD(v14) = *((_WORD *)v12 + 1);
-						v15 = v14 + 1;
-					}
-					else
-					{
-						a4 = 0;
-						a6 = 0;
-						v16 = 0;
-						v15 = 0;
-					}
-					v19 += 2;
-					*(v10 - 112) = a4;
-					*v10 = a6;
-					*(v10 - 111) = v16;
-					v10[1] = v15;
-					v10 += 224;
-					--v9;
+			} else {
+				for (i = 0; i < 16; i++) {
+					pMap->mt[i] = 0;
 				}
-				while ( v9 );
 			}
-			v8 += 2;
-			--v7;
 		}
-		while ( v7 );
+	}
+
+	if (zoomflag) {
+		ViewDX = SCREEN_WIDTH;
+		ViewDY = VIEWPORT_HEIGHT;
+		ViewBX = SCREEN_WIDTH / TILE_WIDTH;
+		ViewBY = VIEWPORT_HEIGHT / TILE_HEIGHT;
+	} else {
+		ViewDX = ZOOM_WIDTH;
+		ViewDY = ZOOM_HEIGHT;
+		ViewBX = ZOOM_WIDTH / TILE_WIDTH;
+		ViewBY = ZOOM_HEIGHT / TILE_HEIGHT;
 	}
 }
 
-void __fastcall T_FillTile(unsigned char *P3Tiles, int xx, int yy, int t)
+/**
+ * @brief Load level data into dPiece
+ * @param P3Tiles Tile set
+ * @param pSector Sector data
+ * @param xi upper left destination
+ * @param yi upper left destination
+ * @param w width of sector
+ * @param h height of sector
+ */
+void T_FillSector(BYTE *P3Tiles, BYTE *pSector, int xi, int yi, int w, int h)
 {
-	unsigned char *v4; // esi
-	unsigned short v5; // ax
-	int v6; // eax
-	int v7; // ST10_4
-	int v8; // ST0C_4
-	int v9; // ST08_4
+	int i, j, xx, yy;
+	long v1, v2, v3, v4, ii;
 
-	v4 = &P3Tiles[8 * (t - 1)];
-	v5 = *(_WORD *)v4;
-	v4 += 2;
-	v6 = v5 + 1;
-	v7 = v6;
-	_LOWORD(v6) = *(_WORD *)v4;
-	v4 += 2;
-	v8 = ++v6;
-	_LOWORD(v6) = *(_WORD *)v4;
-	v9 = ++v6;
-	_LOWORD(v6) = *((_WORD *)v4 + 1);
-	dPiece[xx][yy] = v7;
-	dPiece[xx + 1][yy] = v8;
-	dPiece[xx][yy + 1] = v9;
-	dPiece[xx + 1][yy + 1] = v6 + 1;
+	ii = 4;
+	yy = yi;
+	for (j = 0; j < h; j++) {
+		xx = xi;
+		for (i = 0; i < w; i++) {
+#ifdef USE_ASM
+			__asm {
+				mov		esi, pSector
+				mov		eax, ii
+				add		esi, eax
+				xor		eax, eax
+				lodsw
+				or		eax, eax
+				jz		label1
+				dec		eax
+				mov		esi, P3Tiles
+				shl		eax, 3
+				add		esi, eax
+				xor		eax, eax
+				lodsw
+				inc		eax
+				mov		v1, eax
+				lodsw
+				inc		eax
+				mov		v2, eax
+				lodsw
+				inc		eax
+				mov		v3, eax
+				lodsw
+				inc		eax
+				mov		v4, eax
+				jmp		label2
+			label1:
+				mov		v1, eax
+				mov		v2, eax
+				mov		v3, eax
+				mov		v4, eax
+			label2:
+				nop
+			}
+#else
+			WORD *Map;
+
+			Map = (WORD *)&pSector[ii];
+			if (*Map) {
+				v1 = *((WORD *)&P3Tiles[(*Map - 1) * 8] + 0) + 1;
+				v2 = *((WORD *)&P3Tiles[(*Map - 1) * 8] + 1) + 1;
+				v3 = *((WORD *)&P3Tiles[(*Map - 1) * 8] + 2) + 1;
+				v4 = *((WORD *)&P3Tiles[(*Map - 1) * 8] + 3) + 1;
+			} else {
+				v1 = 0;
+				v2 = 0;
+				v3 = 0;
+				v4 = 0;
+			}
+#endif
+			dPiece[xx][yy] = v1;
+			dPiece[xx + 1][yy] = v2;
+			dPiece[xx][yy + 1] = v3;
+			dPiece[xx + 1][yy + 1] = v4;
+			xx += 2;
+			ii += 2;
+		}
+		yy += 2;
+	}
 }
 
-void __cdecl T_Pass3()
+/**
+ * @brief Load a tile in to dPiece
+ * @param P3Tiles Tile set
+ * @param xx upper left destination
+ * @param yy upper left destination
+ * @param t tile id
+ */
+void T_FillTile(BYTE *P3Tiles, int xx, int yy, int t)
 {
-	int *v1; // esi
-	int *v2; // eax
-	signed int v3; // ecx
-	unsigned char *P3Tiles; // esi
-	unsigned char *pSector; // edi
-	int xx; // edi
+	long v1, v2, v3, v4;
 
-	v1 = dPiece[1];
-	do
-	{
-		v2 = v1;
-		v3 = 56;
-		do
-		{
-			*(v2 - 112) = 0;
-			*v2 = 0;
-			*(v2 - 111) = 0;
-			v2[1] = 0;
-			v2 += 224;
-			--v3;
-		}
-		while ( v3 );
-		v1 += 2;
+#ifdef USE_ASM
+	__asm {
+		mov		eax, t
+		dec		eax
+		mov		esi, P3Tiles
+		shl		eax, 3
+		add		esi, eax
+		xor		eax, eax
+		lodsw
+		inc		eax
+		mov		v1, eax
+		lodsw
+		inc		eax
+		mov		v2, eax
+		lodsw
+		inc		eax
+		mov		v3, eax
+		lodsw
+		inc		eax
+		mov		v4, eax
+		jmp		label1
+		mov		v1, eax
+		mov		v2, eax
+		mov		v3, eax
+		mov		v4, eax
+	label1:
+		nop
 	}
-	while ( (signed int)v1 < (signed int)dPiece[2] );
-	P3Tiles = LoadFileInMem("Levels\\TownData\\Town.TIL", 0);
-	pSector = LoadFileInMem("Levels\\TownData\\Sector1s.DUN", 0);
+#else
+	v1 = *((WORD *)&P3Tiles[(t - 1) * 8] + 0) + 1;
+	v2 = *((WORD *)&P3Tiles[(t - 1) * 8] + 1) + 1;
+	v3 = *((WORD *)&P3Tiles[(t - 1) * 8] + 2) + 1;
+	v4 = *((WORD *)&P3Tiles[(t - 1) * 8] + 3) + 1;
+#endif
+
+	dPiece[xx][yy] = v1;
+	dPiece[xx + 1][yy] = v2;
+	dPiece[xx][yy + 1] = v3;
+	dPiece[xx + 1][yy + 1] = v4;
+}
+
+#ifdef HELLFIRE
+void town_4751C6()
+{
+	dPiece[78][60] = 0x48a;
+	dPiece[79][60] = 0x48b;
+	dPiece[78][61] = 0x48c;
+	dPiece[79][61] = 0x50e;
+	dPiece[78][62] = 0x4ee;
+	dPiece[78][63] = 0x4f0;
+	dPiece[79][62] = 0x510;
+	dPiece[79][63] = 0x511;
+	dPiece[79][64] = 0x512;
+	dPiece[78][64] = 0x11a;
+	dPiece[78][65] = 0x11c;
+	dPiece[79][65] = 0x11d;
+	dPiece[80][60] = 0x513;
+	dPiece[80][61] = 0x515;
+	dPiece[81][61] = 0x516;
+	dPiece[82][60] = 0x517;
+	dPiece[83][60] = 0x518;
+	dPiece[82][61] = 0x519;
+	dPiece[83][61] = 0x51a;
+	dPiece[80][62] = 0x51b;
+	dPiece[81][62] = 0x51c;
+	dPiece[80][63] = 0x51d;
+	dPiece[81][63] = 0x51e;
+	dPiece[80][64] = 0x51f;
+	dPiece[81][64] = 0x520;
+	dPiece[80][65] = 0x521;
+	dPiece[81][65] = 0x522;
+	dPiece[82][64] = 0x527;
+	dPiece[83][64] = 0x528;
+	dPiece[82][65] = 0x529;
+	dPiece[83][65] = 0x52a;
+	dPiece[82][62] = 0x523;
+	dPiece[83][62] = 0x524;
+	dPiece[82][63] = 0x525;
+	dPiece[83][63] = 0x526;
+	dPiece[84][61] = 0x118;
+	dPiece[84][62] = 0x118;
+	dPiece[84][63] = 0x118;
+	dPiece[85][60] = 0x118;
+	dPiece[85][61] = 0x118;
+	dPiece[85][63] = 8;
+	dPiece[85][64] = 8;
+	dPiece[86][60] = 0xd9;
+	dPiece[86][61] = 0x18;
+	dPiece[85][62] = 0x13;
+	dPiece[84][64] = 0x118;
+	SetTownMicros();
+}
+
+void town_475379()
+{
+	dPiece[78][60] = 0x48a;
+	dPiece[79][60] = 0x4eb;
+	dPiece[78][61] = 0x4ec;
+	dPiece[79][61] = 0x4ed;
+	dPiece[78][62] = 0x4ee;
+	dPiece[79][62] = 0x4ef;
+	dPiece[78][63] = 0x4f0;
+	dPiece[79][63] = 0x4f1;
+	dPiece[78][64] = 0x4f2;
+	dPiece[79][64] = 0x4f3;
+	dPiece[78][65] = 0x4f4;
+	dPiece[80][60] = 0x4f5;
+	dPiece[81][60] = 0x4f6;
+	dPiece[80][61] = 0x4f7;
+	dPiece[81][61] = 0x4f8;
+	dPiece[82][60] = 0x4f9;
+	dPiece[83][60] = 0x4fa;
+	dPiece[82][61] = 0x4fb;
+	dPiece[83][61] = 0x4fc;
+	dPiece[80][62] = 0x4fd;
+	dPiece[81][62] = 0x4fe;
+	dPiece[80][63] = 0x4ff;
+	dPiece[81][63] = 0x500;
+	dPiece[80][64] = 0x501;
+	dPiece[81][64] = 0x502;
+	dPiece[80][65] = 0x503;
+	dPiece[81][65] = 0x504;
+	dPiece[82][64] = 0x509;
+	dPiece[83][64] = 0x50a;
+	dPiece[82][65] = 0x50b;
+	dPiece[83][65] = 0x50c;
+	dPiece[82][62] = 0x505;
+	dPiece[83][62] = 0x506;
+	dPiece[82][63] = 0x507;
+	dPiece[83][63] = 0x508;
+	dPiece[84][61] = 0x118;
+	dPiece[84][62] = 0x118;
+	dPiece[84][63] = 0x118;
+	dPiece[85][60] = 0x118;
+	dPiece[85][61] = 0x118;
+	dPiece[85][63] = 8;
+	dPiece[85][64] = 8;
+	dPiece[86][60] = 0xd9;
+	dPiece[86][61] = 0x18;
+	dPiece[85][62] = 0x13;
+	dPiece[84][64] = 0x118;
+	SetTownMicros();
+}
+
+void town_47552C()
+{
+	dPiece[36][21] = 0x52b;
+	dPiece[37][21] = 0x52c;
+	dPiece[36][22] = 0x52d;
+	dPiece[37][22] = 0x52e;
+	dPiece[36][23] = 0x52f;
+	dPiece[37][23] = 0x530;
+	dPiece[36][24] = 0x531;
+	dPiece[37][24] = 0x532;
+	dPiece[35][21] = 0x53b;
+	dPiece[34][21] = 0x53c;
+	SetTownMicros();
+}
+
+void town_475595()
+{
+	dPiece[36][21] = 0x533;
+	dPiece[37][21] = 0x534;
+	dPiece[36][22] = 0x535;
+	dPiece[37][22] = 0x536;
+	dPiece[36][23] = 0x537;
+	dPiece[37][23] = 0x538;
+	dPiece[36][24] = 0x539;
+	dPiece[37][24] = 0x53a;
+	dPiece[35][21] = 0x53b;
+	dPiece[34][21] = 0x53c;
+	SetTownMicros();
+}
+#endif
+
+/**
+ * @brief Initialize all of the levels data
+ */
+void T_Pass3()
+{
+	int xx, yy, x;
+	BYTE *P3Tiles, *pSector;
+
+	for (yy = 0; yy < MAXDUNY; yy += 2) {
+		for (xx = 0; xx < MAXDUNX; xx += 2) {
+			dPiece[xx][yy] = 0;
+			dPiece[xx + 1][yy] = 0;
+			dPiece[xx][yy + 1] = 0;
+			dPiece[xx + 1][yy + 1] = 0;
+		}
+	}
+
+	P3Tiles = LoadFileInMem("Levels\\TownData\\Town.TIL", NULL);
+	pSector = LoadFileInMem("Levels\\TownData\\Sector1s.DUN", NULL);
 	T_FillSector(P3Tiles, pSector, 46, 46, 25, 25);
 	mem_free_dbg(pSector);
-	pSector = LoadFileInMem("Levels\\TownData\\Sector2s.DUN", 0);
+	pSector = LoadFileInMem("Levels\\TownData\\Sector2s.DUN", NULL);
 	T_FillSector(P3Tiles, pSector, 46, 0, 25, 23);
 	mem_free_dbg(pSector);
-	pSector = LoadFileInMem("Levels\\TownData\\Sector3s.DUN", 0);
+	pSector = LoadFileInMem("Levels\\TownData\\Sector3s.DUN", NULL);
 	T_FillSector(P3Tiles, pSector, 0, 46, 23, 25);
 	mem_free_dbg(pSector);
-	pSector = LoadFileInMem("Levels\\TownData\\Sector4s.DUN", 0);
+	pSector = LoadFileInMem("Levels\\TownData\\Sector4s.DUN", NULL);
 	T_FillSector(P3Tiles, pSector, 0, 0, 23, 23);
 	mem_free_dbg(pSector);
-	if ( gbMaxPlayers == 1 )
-	{
-		if ( !(plr[myplr].pTownWarps & 1) )
+
+#ifndef SPAWN
+	if (gbMaxPlayers == 1) {
+#endif
+#ifdef HELLFIRE
+		if (quests[Q_FARMER]._qactive == 3 || quests[Q_FARMER]._qactive == 10
+		    || quests[Q_JERSEY]._qactive == 3 || quests[Q_JERSEY]._qactive == 10) {
+			town_4751C6();
+		} else {
+			town_475379();
+		}
+		if (quests[Q_GRAVE]._qactive == 3 || plr[myplr]._pLvlVisited[21])
+			town_475595();
+		else
+			town_47552C();
+#endif
+#ifndef SPAWN
+#ifdef HELLFIRE
+		if (!(plr[myplr].pTownWarps & 1) && plr[myplr]._pLevel < 10)
+#else
+		if (!(plr[myplr].pTownWarps & 1))
+#endif
+#endif
 		{
 			T_FillTile(P3Tiles, 48, 20, 320);
 		}
-		if ( !(plr[myplr].pTownWarps & 2) )
+#ifndef SPAWN
+#ifdef HELLFIRE
+		if (!(plr[myplr].pTownWarps & 2) && plr[myplr]._pLevel < 15)
+#else
+		if (!(plr[myplr].pTownWarps & 2))
+#endif
+#endif
 		{
 			T_FillTile(P3Tiles, 16, 68, 332);
 			T_FillTile(P3Tiles, 16, 70, 331);
 		}
-		if ( !(plr[myplr].pTownWarps & 4) )
-		{
-			xx = 36;
-			do
-			{
-				T_FillTile(P3Tiles, xx++, 78, random(0, 4) + 1);
+#ifndef SPAWN
+#ifdef HELLFIRE
+		if (!(plr[myplr].pTownWarps & 4) && plr[myplr]._pLevel < 20) {
+#else
+		if (!(plr[myplr].pTownWarps & 4)) {
+#endif
+#endif
+			for (x = 36; x < 46; x++) {
+				T_FillTile(P3Tiles, x, 78, random_(0, 4) + 1);
 			}
-			while ( xx < 46 );
+#ifndef SPAWN
 		}
 	}
-	if ( quests[13]._qactive != 3 && quests[13]._qactive )
+#ifdef HELLFIRE
+	else {
+		if (quests[Q_FARMER]._qactive == 3 || quests[Q_FARMER]._qactive == 10
+		    || quests[Q_JERSEY]._qactive == 3 || quests[Q_JERSEY]._qactive == 10) {
+			town_4751C6();
+		} else {
+			town_475379();
+		}
+		if (quests[Q_GRAVE]._qactive == 3 || plr[myplr]._pLvlVisited[21])
+			town_475595();
+		else
+			town_47552C();
+	}
+#endif
+#endif
+
+	if (quests[Q_PWATER]._qactive != QUEST_DONE && quests[Q_PWATER]._qactive) {
 		T_FillTile(P3Tiles, 60, 70, 342);
-	else
+	} else {
 		T_FillTile(P3Tiles, 60, 70, 71);
+	}
+
 	mem_free_dbg(P3Tiles);
 }
-// 45FDE6: could not find valid save-restore pair for edi
-// 679660: using guessed type char gbMaxPlayers;
 
-void __fastcall CreateTown(int entry)
+/**
+ * @brief Initialize town level
+ * @param entry Methode of entry
+ */
+void CreateTown(int entry)
 {
-	int v1; // edi
-	int (*v2)[112]; // esi
-	_BYTE *v3; // eax
-	int (*v4)[112]; // edx
-	signed int v5; // ebp
-	int v6; // ecx
+	int x, y;
 
-	v1 = 0;
 	dminx = 10;
 	dminy = 10;
 	dmaxx = 84;
 	dmaxy = 84;
-	if ( entry )
-	{
-		if ( entry == 1 )
-		{
-			ViewX = 25;
-			ViewY = 31;
-		}
-		else if ( entry == 7 )
-		{
-			if ( TWarpFrom == 5 )
-			{
-				ViewX = 49;
-				ViewY = 22;
-			}
-			if ( TWarpFrom == 9 )
-			{
-				ViewX = 18;
-				ViewY = 69;
-			}
-			if ( TWarpFrom == 13 )
-			{
-				ViewX = 41;
-				ViewY = 81;
-			}
-		}
-	}
-	else
-	{
+
+	if (entry == ENTRY_MAIN) { // New game
 		ViewX = 75;
 		ViewY = 68;
-	}
-	T_Pass3();
-	memset(dTransVal, 0, 0x3100u);
-	memset(dFlags, 0, 0x3100u);
-	memset(dPlayer, 0, 0x3100u);
-	memset(dMonster, 0, 0xC400u);
-	memset(dObject, 0, 0x3100u);
-	memset(dItem, 0, 0x3100u);
-	memset(dArch, 0, 0x3100u);
-	v2 = dPiece;
-	do
-	{
-		v3 = (unsigned char *)dArch + v1;
-		v4 = v2;
-		v5 = 112;
-		do
-		{
-			v6 = (*v4)[0];
-			if ( (*v4)[0] == 360 )
-			{
-				*v3 = 1;
-			}
-			else
-			{
-				switch ( v6 )
-				{
-					case 358:
-						*v3 = 2;
-						break;
-					case 129:
-						*v3 = 6;
-						break;
-					case 130:
-						*v3 = 7;
-						break;
-					case 128:
-						*v3 = 8;
-						break;
-					case 117:
-						*v3 = 9;
-						break;
-					case 157:
-						*v3 = 10;
-						break;
-					case 158:
-						*v3 = 11;
-						break;
-					case 156:
-						*v3 = 12;
-						break;
-					case 162:
-						*v3 = 13;
-						break;
-					case 160:
-						*v3 = 14;
-						break;
-					case 214:
-						*v3 = 15;
-						break;
-					case 212:
-						*v3 = 16;
-						break;
-					case 217:
-						*v3 = 17;
-						break;
-					case 216:
-						*v3 = 18;
-						break;
-				}
-			}
-			++v4;
-			v3 += 112;
-			--v5;
+	} else if (entry == ENTRY_PREV) { // Cathedral
+		ViewX = 25;
+		ViewY = 31;
+	} else if (entry == ENTRY_TWARPUP) {
+		if (TWarpFrom == 5) {
+			ViewX = 49;
+			ViewY = 22;
 		}
-		while ( v5 );
-		v2 = (int (*)[112])((char *)v2 + 4);
-		++v1;
+		if (TWarpFrom == 9) {
+			ViewX = 18;
+			ViewY = 69;
+		}
+		if (TWarpFrom == 13) {
+			ViewX = 41;
+			ViewY = 81;
+		}
+#ifdef HELLFIRE
+		if (TWarpFrom == 21) {
+			ViewX = 36;
+			ViewY = 25;
+		}
+		if (TWarpFrom == 17) {
+			ViewX = 79;
+			ViewY = 62;
+		}
+#endif
 	}
-	while ( (signed int)v2 < (signed int)dPiece[1] );
-	town_init_dpiece_defs_map();
+
+	T_Pass3();
+	memset(dLight, 0, sizeof(dLight));
+	memset(dFlags, 0, sizeof(dFlags));
+	memset(dPlayer, 0, sizeof(dPlayer));
+	memset(dMonster, 0, sizeof(dMonster));
+	memset(dObject, 0, sizeof(dObject));
+	memset(dItem, 0, sizeof(dItem));
+	memset(dSpecial, 0, sizeof(dSpecial));
+
+	for (y = 0; y < MAXDUNY; y++) {
+		for (x = 0; x < MAXDUNX; x++) {
+			if (dPiece[x][y] == 360) {
+				dSpecial[x][y] = 1;
+			} else if (dPiece[x][y] == 358) {
+				dSpecial[x][y] = 2;
+			} else if (dPiece[x][y] == 129) {
+				dSpecial[x][y] = 6;
+			} else if (dPiece[x][y] == 130) {
+				dSpecial[x][y] = 7;
+			} else if (dPiece[x][y] == 128) {
+				dSpecial[x][y] = 8;
+			} else if (dPiece[x][y] == 117) {
+				dSpecial[x][y] = 9;
+			} else if (dPiece[x][y] == 157) {
+				dSpecial[x][y] = 10;
+			} else if (dPiece[x][y] == 158) {
+				dSpecial[x][y] = 11;
+			} else if (dPiece[x][y] == 156) {
+				dSpecial[x][y] = 12;
+			} else if (dPiece[x][y] == 162) {
+				dSpecial[x][y] = 13;
+			} else if (dPiece[x][y] == 160) {
+				dSpecial[x][y] = 14;
+			} else if (dPiece[x][y] == 214) {
+				dSpecial[x][y] = 15;
+			} else if (dPiece[x][y] == 212) {
+				dSpecial[x][y] = 16;
+			} else if (dPiece[x][y] == 217) {
+				dSpecial[x][y] = 17;
+			} else if (dPiece[x][y] == 216) {
+				dSpecial[x][y] = 18;
+			}
+		}
+	}
+
+	SetTownMicros();
 }
-// 5CF328: using guessed type int dmaxx;
-// 5CF32C: using guessed type int dmaxy;
-// 5D2458: using guessed type int dminx;
-// 5D245C: using guessed type int dminy;
-// 6ABB30: using guessed type int TWarpFrom;

@@ -1,75 +1,90 @@
-//HEADER_GOES_HERE
+/**
+ * @file setmaps.cpp
+ *
+ * Implementation of functionality the special quest dungeons.
+ */
+#include "all.h"
 
-#include "../types.h"
-
-RECT8 QSRects[32] =
-{
-  { { 19u, 47u }, { 26u, 55u } },
-  { { 26u, 49u }, { 30u, 53u } },
-  { { 33u, 19u }, { 47u, 29u } },
-  { { 37u, 29u }, { 43u, 39u } },
-  { { 27u, 53u }, { 35u, 61u } },
-  { { 27u, 35u }, { 34u, 42u } },
-  { { 45u, 35u }, { 53u, 43u } },
-  { { 45u, 53u }, { 53u, 61u } },
-  { { 31u, 39u }, { 49u, 57u } },
-  { { 49u, 45u }, { 58u, 51u } },
-  { { 57u, 31u }, { 62u, 37u } },
-  { { 63u, 31u }, { 69u, 40u } },
-  { { 59u, 41u }, { 73u, 55u } },
-  { { 63u, 55u }, { 69u, 65u } },
-  { { 73u, 45u }, { 78u, 51u } },
-  { { 79u, 43u }, { 89u, 53u } },
-  { { 43u, 19u }, { 50u, 26u } },
-  { { 51u, 19u }, { 59u, 26u } },
-  { { 35u, 27u }, { 42u, 34u } },
-  { { 43u, 27u }, { 49u, 34u } },
-  { { 50u, 27u }, { 59u, 34u } },
-  { { 19u, 31u }, { 34u, 47u } },
-  { { 34u, 35u }, { 42u, 42u } },
-  { { 43u, 35u }, { 50u, 42u } },
-  { { 51u, 35u }, { 62u, 42u } },
-  { { 63u, 31u }, { 66u, 46u } },
-  { { 67u, 31u }, { 78u, 34u } },
-  { { 67u, 35u }, { 78u, 42u } },
-  { { 67u, 43u }, { 78u, 46u } },
-  { { 35u, 43u }, { 42u, 51u } },
-  { { 43u, 43u }, { 49u, 51u } },
-  { { 50u, 43u }, { 59u, 51u } }
-};
-char *quest_level_names[] =
-{
-  &empty_string,
-  "Skeleton King's Lair",
-  "Bone Chamber",
-  "Maze",
-  "Poisoned Water Supply",
-  "Archbishop Lazarus' Lair"
+// BUGFIX: constant data should be const
+BYTE SkelKingTrans1[] = {
+	19, 47, 26, 55,
+	26, 49, 30, 53
 };
 
-int __fastcall ObjIndex(int x, int y)
+BYTE SkelKingTrans2[] = {
+	33, 19, 47, 29,
+	37, 29, 43, 39
+};
+
+BYTE SkelKingTrans3[] = {
+	27, 53, 35, 61,
+	27, 35, 34, 42,
+	45, 35, 53, 43,
+	45, 53, 53, 61,
+	31, 39, 49, 57
+};
+
+BYTE SkelKingTrans4[] = {
+	49, 45, 58, 51,
+	57, 31, 62, 37,
+	63, 31, 69, 40,
+	59, 41, 73, 55,
+	63, 55, 69, 65,
+	73, 45, 78, 51,
+	79, 43, 89, 53
+};
+
+BYTE SkelChamTrans1[] = {
+	43, 19, 50, 26,
+	51, 19, 59, 26,
+	35, 27, 42, 34,
+	43, 27, 49, 34,
+	50, 27, 59, 34
+};
+
+BYTE SkelChamTrans2[] = {
+	19, 31, 34, 47,
+	34, 35, 42, 42
+};
+
+BYTE SkelChamTrans3[] = {
+	43, 35, 50, 42,
+	51, 35, 62, 42,
+	63, 31, 66, 46,
+	67, 31, 78, 34,
+	67, 35, 78, 42,
+	67, 43, 78, 46,
+	35, 43, 42, 51,
+	43, 43, 49, 51,
+	50, 43, 59, 51
+};
+
+/** Maps from quest level to quest level names. */
+const char *const quest_level_names[] = {
+	"",
+	"Skeleton King's Lair",
+	"Bone Chamber",
+	"Maze",
+	"Poisoned Water Supply",
+	"Archbishop Lazarus' Lair",
+};
+
+int ObjIndex(int x, int y)
 {
-	int i; // edi
-	int oi; // esi
+	int i;
+	int oi;
 
-	i = 0;
-
-	if ( nobjects > 0 )
-	{
-		while ( 1 )
-		{
-			oi = objectactive[i];
-			if ( object[oi]._ox == x && object[oi]._oy == y )
-				return oi;
-			if ( ++i >= nobjects )
-				break;
-		}
+	for (i = 0; i < nobjects; i++) {
+		oi = objectactive[i];
+		if (object[oi]._ox == x && object[oi]._oy == y)
+			return oi;
 	}
-	TermMsg("ObjIndex: Active object not found at (%d,%d)", x, y);
+	app_fatal("ObjIndex: Active object not found at (%d,%d)", x, y);
 	return -1;
 }
 
-void __cdecl AddSKingObjs()
+#ifndef SPAWN
+void AddSKingObjs()
 {
 	SetObjMapRange(ObjIndex(64, 34), 20, 7, 23, 10, 1);
 	SetObjMapRange(ObjIndex(64, 59), 20, 14, 21, 16, 2);
@@ -79,130 +94,108 @@ void __cdecl AddSKingObjs()
 	SetObjMapRange(ObjIndex(27, 53), 8, 1, 15, 11, 3);
 }
 
-void __cdecl AddSChamObjs()
+void AddSChamObjs()
 {
 	SetObjMapRange(ObjIndex(37, 30), 17, 0, 21, 5, 1);
 	SetObjMapRange(ObjIndex(37, 46), 13, 0, 16, 5, 2);
 }
 
-void __cdecl AddVileObjs()
+void AddVileObjs()
 {
 	SetObjMapRange(ObjIndex(26, 45), 1, 1, 9, 10, 1);
 	SetObjMapRange(ObjIndex(45, 46), 11, 1, 20, 10, 2);
 	SetObjMapRange(ObjIndex(35, 36), 7, 11, 13, 18, 3);
 }
 
-void __fastcall DRLG_SetMapTrans(char *sFileName)
+void DRLG_SetMapTrans(const char *sFileName)
 {
-	unsigned char *pLevelMap; // ecx
-	int v2; // ebx
-	int v3; // edi
-	int v4; // eax
-	int v5; // edi
-	int v6; // eax
-	int v7; // ebx
-	char *v8; // esi
-	char *v9; // eax
-	int v10; // [esp+Ch] [ebp-8h]
-	int v11; // [esp+10h] [ebp-4h]
+	int x, y;
+	int i, j;
+	BYTE *pLevelMap;
+	BYTE *d;
+	DWORD dwOffset;
 
-	pLevelMap = LoadFileInMem(sFileName, 0);
-	v11 = 0;
-	v2 = *pLevelMap;
-	v3 = pLevelMap[2];
-	v4 = v3;
-	v5 = 2 * v3;
-	v6 = v2 * v4;
-	v7 = 2 * v2;
-	v8 = (char *)&pLevelMap[6 * v7 * v5 + 4 + 2 * v6];
-	if ( v5 > 0 )
-	{
-		do
-		{
-			if ( v7 > 0 )
-			{
-				v10 = v7;
-				v9 = &dung_map[16][v11 + 16];
-				do
-				{
-					*v9 = *v8;
-					v8 += 2;
-					v9 += 112;
-					--v10;
-				}
-				while ( v10 );
-			}
-			++v11;
+	pLevelMap = LoadFileInMem(sFileName, NULL);
+	d = pLevelMap + 2;
+	x = pLevelMap[0];
+	y = *d;
+	dwOffset = (x * y + 1) * 2;
+	x <<= 1;
+	y <<= 1;
+	dwOffset += 3 * x * y * 2;
+	d += dwOffset;
+
+	for (j = 0; j < y; j++) {
+		for (i = 0; i < x; i++) {
+			dTransVal[16 + i][16 + j] = *d;
+			d += 2;
 		}
-		while ( v11 < v5 );
 	}
 	mem_free_dbg(pLevelMap);
 }
 
-void __cdecl LoadSetMap()
+/**
+ * @brief Load a quest map, the given map is specified via the global setlvlnum
+ */
+void LoadSetMap()
 {
-	switch ( setlvlnum )
-	{
-		case SL_SKELKING:
-			if ( quests[12]._qactive == 1 )
-			{
-				quests[12]._qactive = 2;
-				quests[12]._qvar1 = 1;
-			}
-			LoadPreL1Dungeon("Levels\\L1Data\\SklKng1.DUN", 83, 45);
-			LoadL1Dungeon("Levels\\L1Data\\SklKng2.DUN", 83, 45);
-			LoadPalette("Levels\\L1Data\\L1_2.pal");
-			DRLG_AreaTrans(2, (unsigned char *)QSRects);
-			DRLG_ListTrans(2, (unsigned char *)&QSRects[2]);
-			DRLG_AreaTrans(5, (unsigned char *)&QSRects[4]);
-			DRLG_ListTrans(7, (unsigned char *)&QSRects[9]);
-			AddL1Objs(0, 0, 112, 112);
-			AddSKingObjs();
-			InitSKingTriggers();
-			break;
-		case SL_BONECHAMB:
-			LoadPreL2Dungeon("Levels\\L2Data\\Bonecha2.DUN", 69, 39);
-			LoadL2Dungeon("Levels\\L2Data\\Bonecha1.DUN", 69, 39);
-			LoadPalette("Levels\\L2Data\\L2_2.pal");
-			DRLG_ListTrans(5, (unsigned char *)&QSRects[16]);
-			DRLG_AreaTrans(2, (unsigned char *)&QSRects[21]);
-			DRLG_ListTrans(9, (unsigned char *)&QSRects[23]);
-			AddL2Objs(0, 0, 112, 112);
-			AddSChamObjs();
-			InitSChambTriggers();
-			break;
-		case SL_MAZE:
-			LoadPreL1Dungeon("Levels\\L1Data\\Lv1MazeA.DUN", 20, 50);
-			LoadL1Dungeon("Levels\\L1Data\\Lv1MazeB.DUN", 20, 50);
-			LoadPalette("Levels\\L1Data\\L1_5.pal");
-			AddL1Objs(0, 0, 112, 112);
-			DRLG_SetMapTrans("Levels\\L1Data\\Lv1MazeA.DUN");
-			break;
-		case SL_POISONWATER:
-			if ( quests[13]._qactive == 1 )
-				quests[13]._qactive = 2;
-			LoadPreL3Dungeon("Levels\\L3Data\\Foulwatr.DUN", 19, 50);
-			LoadL3Dungeon("Levels\\L3Data\\Foulwatr.DUN", 20, 50);
-			LoadPalette("Levels\\L3Data\\L3pfoul.pal");
-			InitPWaterTriggers();
-			break;
-		case SL_VILEBETRAYER:
-			if ( quests[15]._qactive == 3 )
-			{
-				quests[15]._qvar2 = 4;
-			}
-			else if ( quests[15]._qactive == 2 )
-			{
-				quests[15]._qvar2 = 3;
-			}
-			LoadPreL1Dungeon("Levels\\L1Data\\Vile1.DUN", 35, 36);
-			LoadL1Dungeon("Levels\\L1Data\\Vile2.DUN", 35, 36);
-			LoadPalette("Levels\\L1Data\\L1_2.pal");
-			AddL1Objs(0, 0, 112, 112);
-			AddVileObjs();
-			DRLG_SetMapTrans("Levels\\L1Data\\Vile1.DUN");
-			InitNoTriggers();
-			break;
+	switch (setlvlnum) {
+	case SL_SKELKING:
+		if (quests[Q_SKELKING]._qactive == QUEST_INIT) {
+			quests[Q_SKELKING]._qactive = QUEST_ACTIVE;
+			quests[Q_SKELKING]._qvar1 = 1;
+		}
+		LoadPreL1Dungeon("Levels\\L1Data\\SklKng1.DUN", 83, 45);
+		LoadL1Dungeon("Levels\\L1Data\\SklKng2.DUN", 83, 45);
+		LoadPalette("Levels\\L1Data\\L1_2.pal");
+		DRLG_AreaTrans(sizeof(SkelKingTrans1) / 4, &SkelKingTrans1[0]);
+		DRLG_ListTrans(sizeof(SkelKingTrans2) / 4, &SkelKingTrans2[0]);
+		DRLG_AreaTrans(sizeof(SkelKingTrans3) / 4, &SkelKingTrans3[0]);
+		DRLG_ListTrans(sizeof(SkelKingTrans4) / 4, &SkelKingTrans4[0]);
+		AddL1Objs(0, 0, MAXDUNX, MAXDUNY);
+		AddSKingObjs();
+		InitSKingTriggers();
+		break;
+	case SL_BONECHAMB:
+		LoadPreL2Dungeon("Levels\\L2Data\\Bonecha2.DUN", 69, 39);
+		LoadL2Dungeon("Levels\\L2Data\\Bonecha1.DUN", 69, 39);
+		LoadPalette("Levels\\L2Data\\L2_2.pal");
+		DRLG_ListTrans(sizeof(SkelChamTrans1) / 4, &SkelChamTrans1[0]);
+		DRLG_AreaTrans(sizeof(SkelChamTrans2) / 4, &SkelChamTrans2[0]);
+		DRLG_ListTrans(sizeof(SkelChamTrans3) / 4, &SkelChamTrans3[0]);
+		AddL2Objs(0, 0, MAXDUNX, MAXDUNY);
+		AddSChamObjs();
+		InitSChambTriggers();
+		break;
+	case SL_MAZE:
+		LoadPreL1Dungeon("Levels\\L1Data\\Lv1MazeA.DUN", 20, 50);
+		LoadL1Dungeon("Levels\\L1Data\\Lv1MazeB.DUN", 20, 50);
+		LoadPalette("Levels\\L1Data\\L1_5.pal");
+		AddL1Objs(0, 0, MAXDUNX, MAXDUNY);
+		DRLG_SetMapTrans("Levels\\L1Data\\Lv1MazeA.DUN");
+		break;
+	case SL_POISONWATER:
+		if (quests[Q_PWATER]._qactive == QUEST_INIT)
+			quests[Q_PWATER]._qactive = QUEST_ACTIVE;
+		LoadPreL3Dungeon("Levels\\L3Data\\Foulwatr.DUN", 19, 50);
+		LoadL3Dungeon("Levels\\L3Data\\Foulwatr.DUN", 20, 50);
+		LoadPalette("Levels\\L3Data\\L3pfoul.pal");
+		InitPWaterTriggers();
+		break;
+	case SL_VILEBETRAYER:
+		if (quests[Q_BETRAYER]._qactive == QUEST_DONE) {
+			quests[Q_BETRAYER]._qvar2 = 4;
+		} else if (quests[Q_BETRAYER]._qactive == QUEST_ACTIVE) {
+			quests[Q_BETRAYER]._qvar2 = 3;
+		}
+		LoadPreL1Dungeon("Levels\\L1Data\\Vile1.DUN", 35, 36);
+		LoadL1Dungeon("Levels\\L1Data\\Vile2.DUN", 35, 36);
+		LoadPalette("Levels\\L1Data\\L1_2.pal");
+		AddL1Objs(0, 0, MAXDUNX, MAXDUNY);
+		AddVileObjs();
+		DRLG_SetMapTrans("Levels\\L1Data\\Vile1.DUN");
+		InitNoTriggers();
+		break;
 	}
 }
-// 5CCB10: using guessed type char setlvlnum;
+#endif

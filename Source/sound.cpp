@@ -1,497 +1,455 @@
-//HEADER_GOES_HERE
+/**
+ * @file sound.cpp
+ *
+ * Implementation of functions setting up the audio pipeline.
+ */
+#include "all.h"
+#include "../3rdParty/Storm/Source/storm.h"
 
-#include "../types.h"
-
-float sound_cpp_init_value;
-IDirectSoundBuffer *DSBs[8];
-IDirectSound *sglpDS;
-char gbSndInited;
+/** Contains the audio channels used for playback of sounds. */
+LPDIRECTSOUNDBUFFER DSBs[8];
+LPDIRECTSOUND sglpDS;
+BOOLEAN gbSndInited;
 int sglMusicVolume;
 int sglSoundVolume;
-HMODULE hDsound_dll; // idb
-void *sgpMusicTrack;
-IDirectSoundBuffer *sglpDSB;
+/** Provides a handle to the dynamic library dsound.dll. */
+HMODULE hDsound_dll;
+/** Specifies whether background music is enabled. */
+HANDLE sghMusic;
+LPDIRECTSOUNDBUFFER sglpDSB;
 
-int sound_inf = 0x7F800000; // weak
+/* data */
 
-/* rdata */
-
-char gbMusicOn = 1; // weak
-char gbSoundOn = 1; // weak
-char gbDupSounds = 1; // weak
-int sgnMusicTrack = 6;
-char *sgszMusicTracks[6] =
-{
-  "Music\\DTowne.wav",
-  "Music\\DLvlA.wav",
-  "Music\\DLvlB.wav",
-  "Music\\DLvlC.wav",
-  "Music\\DLvlD.wav",
-  "Music\\Dintro.wav"
+BOOLEAN gbMusicOn = TRUE;
+/** Specifies whether sound effects are enabled. */
+BOOLEAN gbSoundOn = TRUE;
+/** Specifies that no duplicate audio channel should be used. */
+BOOLEAN gbDupSounds = TRUE;
+/** Specifies the active background music track id. */
+int sgnMusicTrack = NUM_MUSIC;
+/** Maps from track ID to track name. */
+const char *const sgszMusicTracks[NUM_MUSIC] = {
+#ifdef SPAWN
+	"Music\\sTowne.wav",
+	"Music\\sLvlA.wav",
+	"Music\\sLvlA.wav",
+	"Music\\sLvlA.wav",
+	"Music\\sLvlA.wav",
+#ifdef HELLFIRE
+	"Music\\sLvlA.wav",
+	"Music\\sLvlA.wav",
+#endif
+	"Music\\sintro.wav",
+#else
+	"Music\\DTowne.wav",
+	"Music\\DLvlA.wav",
+	"Music\\DLvlB.wav",
+	"Music\\DLvlC.wav",
+	"Music\\DLvlD.wav",
+#ifdef HELLFIRE
+	"Music\\DLvlE.wav",
+	"Music\\DLvlF.wav",
+#endif
+	"Music\\Dintro.wav",
+#endif
 };
-RECT8 QSRect[2] = { { { 15, -16 }, { 15, -16 } }, { { 30, -31 }, { 30, -31 } } }; /* psx version? */
+char unk_volume[4][2] = {
+	{ 15, -16 },
+	{ 15, -16 },
+	{ 30, -31 },
+	{ 30, -31 }
+};
 
-struct sound_cpp_init
+void snd_update(BOOL bStopAll)
 {
-	sound_cpp_init()
-	{
-		sound_cpp_init_value = sound_inf;
-	}
-} _sound_cpp_init;
-// 47F24C: using guessed type int sound_inf;
+	DWORD dwStatus, i;
 
-void __fastcall snd_update(bool bStopAll)
-{
-	BOOL v1; // edi
-	unsigned int v2; // esi
-	IDirectSoundBuffer *v3; // eax
-	unsigned long v4; // [esp+8h] [ebp-4h]
+	for (i = 0; i < 8; i++) {
+		if (!DSBs[i])
+			continue;
 
-	v1 = bStopAll;
-	v2 = 0;
-	do
-	{
-		v3 = DSBs[v2];
-		if ( v3 && (v1 || v3->GetStatus(&v4) || v4 != DSBSTATUS_PLAYING) ) // FIX_ME: double check
-		{
-			DSBs[v2]->Stop();
-			DSBs[v2]->Release();
-			DSBs[v2] = 0;
-		}
-		++v2;
-	}
-	while ( v2 < 8 );
-}
+		if (!bStopAll && DSBs[i]->GetStatus(&dwStatus) == DS_OK && dwStatus == DSBSTATUS_PLAYING)
+			continue;
 
-void __fastcall snd_stop_snd(TSnd *pSnd)
-{
-	IDirectSoundBuffer *v1; // eax
+		DSBs[i]->Stop();
+		DSBs[i]->Release();
 
-	if ( pSnd )
-	{
-		v1 = pSnd->DSB;
-		if ( v1 )
-			v1->Stop();
+		DSBs[i] = NULL;
 	}
 }
 
-bool __fastcall snd_playing(TSnd *pSnd)
+static LPDIRECTSOUNDBUFFER sound_dup_channel(LPDIRECTSOUNDBUFFER DSB)
 {
-	IDirectSoundBuffer *v1; // eax
-	bool result; // al
-	unsigned long v3; // [esp+0h] [ebp-4h]
+	DWORD i;
 
-	v3 = (unsigned long)pSnd;
-	if ( pSnd
-	  && (v1 = pSnd->DSB) != 0
-	  && !v1->GetStatus(&v3) )
-	{
-		result = v3 == DSBSTATUS_PLAYING;
+	if (!gbDupSounds) {
+		return NULL;
 	}
-	else
-	{
-		result = 0;
-	}
-	return result;
-}
 
-void __fastcall snd_play_snd(TSnd *pSnd, int lVolume, int lPan)
-{
-	TSnd *v3; // edi
-	int v4; // ebp
-	IDirectSoundBuffer *v5; // esi
-	//int v6; // eax
-	int v7; // ebp
-	int v8; // eax
-	//int v9; // eax
-	DWORD v10; // [esp+30h] [ebp-4h]
-
-	v3 = pSnd;
-	v4 = lVolume;
-	if ( pSnd )
-	{
-		if ( gbSoundOn )
-		{
-			v5 = pSnd->DSB;
-			if ( v5 )
-			{
-				v10 = GetTickCount();
-				if ( v10 - v3->start_tc >= 0x50 )
-				{
-					//_LOBYTE(v6) = snd_playing(v3);
-					if ( !snd_playing(v3) || (v5 = sound_dup_channel(v3->DSB)) != 0 )
-					{
-						v7 = sglSoundVolume + v4;
-						if ( v7 >= -1600 )
-						{
-							if ( v7 > 0 )
-								v7 = 0;
-						}
-						else
-						{
-							v7 = -1600;
-						}
-						v5->SetVolume(v7);
-						v5->SetPan(lPan);
-						v8 = v5->Play(0, 0, 0);
-						if ( v8 == DSERR_BUFFERLOST )
-						{
-							//_LOBYTE(v9) = sound_file_reload(v3, v5);
-							if ( sound_file_reload(v3, v5) )
-								v5->Play(0, 0, 0);
-						}
-						else if ( v8 )
-						{
-							DSErrDlg(v8, 261, "C:\\Src\\Diablo\\Source\\SOUND.CPP");
-						}
-						v3->start_tc = v10;
-					}
-				}
-				else
-				{
-					GetTickCount();
-				}
+	for (i = 0; i < 8; i++) {
+		if (!DSBs[i]) {
+			if (sglpDS->DuplicateSoundBuffer(DSB, &DSBs[i]) != DS_OK) {
+				return NULL;
 			}
+
+			return DSBs[i];
 		}
 	}
+
+	return NULL;
 }
-// 4A22D5: using guessed type char gbSoundOn;
 
-IDirectSoundBuffer *__fastcall sound_dup_channel(IDirectSoundBuffer *DSB)
+static void snd_get_volume(const char *value_name, int *value)
 {
-	IDirectSoundBuffer *result; // eax
-	IDirectSoundBuffer **v2; // esi
-
-	result = 0;
-	if ( gbDupSounds )
-	{
-		while ( DSBs[(_DWORD)result] )
-		{
-			result = (IDirectSoundBuffer *)((char *)result + 1); // result++
-			if ( (unsigned int)result >= 8 )
-				return 0;
-		}
-		v2 = &DSBs[(_DWORD)result];
-		if ( sglpDS->DuplicateSoundBuffer(DSB, &DSBs[(_DWORD)result]) )
-		{
-			return 0;
-		}
-		result = *v2;
+	int v = *value;
+	if (!SRegLoadValue(APP_NAME, value_name, 0, &v)) {
+		v = VOLUME_MAX;
 	}
-	return result;
-}
-// 4A22D6: using guessed type char gbDupSounds;
+	*value = v;
 
-bool __fastcall sound_file_reload(TSnd *sound_file, IDirectSoundBuffer *DSB)
-{
-	IDirectSoundBuffer *v2; // edi
-	TSnd *v3; // esi
-	char *v5; // ecx
-	void *aptr2; // [esp+8h] [ebp-18h]
-	unsigned long asize2; // [esp+Ch] [ebp-14h]
-	bool v8; // [esp+10h] [ebp-10h]
-	void *aptr1; // [esp+14h] [ebp-Ch]
-	unsigned long asize1; // [esp+18h] [ebp-8h]
-	void *a1; // [esp+1Ch] [ebp-4h]
-
-	v2 = DSB;
-	v3 = sound_file;
-	if ( DSB->Restore() )
-		return 0;
-	v5 = v3->sound_path;
-	v8 = 0;
-	WOpenFile(v5, &a1, 0);
-	WSetFilePointer(a1, v3->offset, 0, 0);
-	if ( !v2->Lock(0, v3->len, &aptr1, &asize1, &aptr2, &asize2, 0) )
-	{
-		WReadFile(a1, (char *)aptr1, asize1);
-		if ( !v2->Unlock(aptr1, asize1, aptr2, asize2) )
-			v8 = 1;
+	if (*value < VOLUME_MIN) {
+		*value = VOLUME_MIN;
+	} else if (*value > VOLUME_MAX) {
+		*value = VOLUME_MAX;
 	}
-	WCloseFile(a1);
-	return v8;
+	*value -= *value % 100;
 }
 
-TSnd *__fastcall sound_file_load(char *path)
+static void snd_set_volume(const char *key, int value)
 {
-//	int v1; // esi
-	char *v2; // edi
-	TSnd *v4; // esi
-	int v5; // eax
-	int v6; // eax
-//	int v7; // [esp-4h] [ebp-24h]
-	void *aptr2; // [esp+8h] [ebp-18h]
-	unsigned long asize2; // [esp+Ch] [ebp-14h]
-	void *a1; // [esp+10h] [ebp-10h]
-	void *ptr; // [esp+14h] [ebp-Ch]
-	void *aptr1; // [esp+18h] [ebp-8h]
-	unsigned long asize1; // [esp+1Ch] [ebp-4h]
-
-	v2 = path;
-	if ( !sglpDS )
-		return 0;
-//	v7 = v1;
-	WOpenFile(path, &a1, 0);
-	v4 = (TSnd *)DiabloAllocPtr(40);
-	memset(v4, 0, 0x28u);
-	v4->sound_path = v2;
-	v4->start_tc = GetTickCount() - 81;
-	ptr = LoadWaveFile(a1, &v4->fmt, &v4->len);
-	if ( !ptr )
-		TermMsg("Invalid sound format on file %s", v4->sound_path);
-	sound_CreateSoundBuffer(v4);
-	v5 = v4->DSB->Lock(0, v4->len, &aptr1, &asize1, &aptr2, &asize2, 0); //v7);
-	if ( v5 )
-		DSErrDlg(v5, 318, "C:\\Src\\Diablo\\Source\\SOUND.CPP");
-	memcpy(aptr1, (char *)ptr + v4->offset, asize1);
-	v6 = v4->DSB->Unlock(aptr1, asize1, aptr2, asize2);
-	if ( v6 )
-		DSErrDlg(v6, 325, "C:\\Src\\Diablo\\Source\\SOUND.CPP");
-	mem_free_dbg(ptr);
-	WCloseFile(a1);
-	return v4;
-}
-// 456F07: could not find valid save-restore pair for esi
-
-void __fastcall sound_CreateSoundBuffer(TSnd *sound_file)
-{
-	TSnd *v1; // esi
-	int v2; // eax
-	DSBUFFERDESC v3; // [esp+4h] [ebp-14h]
-
-	v1 = sound_file;
-	memset(&v3, 0, sizeof(DSBUFFERDESC));
-	v3.dwBufferBytes = v1->len;
-	v3.lpwfxFormat = &v1->fmt;
-	v3.dwSize = sizeof(DSBUFFERDESC);
-	v3.dwFlags = DSBCAPS_CTRLVOLUME|DSBCAPS_CTRLPAN|DSBCAPS_STATIC;
-	v2 = sglpDS->CreateSoundBuffer(&v3, &v1->DSB, NULL);
-	if ( v2 )
-		DSErrDlg(v2, 282, "C:\\Src\\Diablo\\Source\\SOUND.CPP");
+	SRegSaveValue(APP_NAME, key, 0, value);
 }
 
-void __fastcall sound_file_cleanup(TSnd *sound_file)
+static BOOL sound_file_reload(TSnd *sound_file, LPDIRECTSOUNDBUFFER DSB)
 {
-	TSnd *v1; // esi
-	IDirectSoundBuffer *v2; // eax
+	HANDLE file;
+	LPVOID buf1, buf2;
+	DWORD size1, size2;
+	BOOL rv;
+	HRESULT error_code;
 
-	v1 = sound_file;
-	if ( sound_file )
-	{
-		v2 = sound_file->DSB;
-		if ( v2 )
-		{
+	if (DSB->Restore() != DS_OK)
+		return FALSE;
+
+	rv = FALSE;
+
+	WOpenFile(sound_file->sound_path, &file, FALSE);
+	WSetFilePointer(file, sound_file->chunk.dwOffset, NULL, FILE_BEGIN);
+
+	error_code = DSB->Lock(0, sound_file->chunk.dwSize, &buf1, &size1, &buf2, &size2, 0);
+	if (error_code == DS_OK) {
+		WReadFile(file, buf1, size1);
+		error_code = DSB->Unlock(buf1, size1, buf2, size2);
+		if (error_code == DS_OK)
+			rv = TRUE;
+	}
+
+	WCloseFile(file);
+
+	return rv;
+}
+
+void snd_stop_snd(TSnd *pSnd)
+{
+	if (pSnd && pSnd->DSB)
+		pSnd->DSB->Stop();
+}
+
+BOOL snd_playing(TSnd *pSnd)
+{
+	DWORD dwStatus;
+
+	if (!pSnd)
+		return FALSE;
+
+	if (pSnd->DSB == NULL)
+		return FALSE;
+
+	if (pSnd->DSB->GetStatus(&dwStatus) != DS_OK)
+		return FALSE;
+
+	return dwStatus == DSBSTATUS_PLAYING;
+}
+
+void snd_play_snd(TSnd *pSnd, int lVolume, int lPan)
+{
+	LPDIRECTSOUNDBUFFER DSB;
+	DWORD tc;
+	HRESULT error_code;
+
+	if (!pSnd || !gbSoundOn) {
+		return;
+	}
+
+	DSB = pSnd->DSB;
+	if (DSB == NULL) {
+		return;
+	}
+
+	tc = GetTickCount();
+	if (tc - pSnd->start_tc < 80) {
+		GetTickCount(); // BUGFIX: unnecessary GetTickCount
+		return;
+	}
+
+	if (snd_playing(pSnd)) {
+		DSB = sound_dup_channel(pSnd->DSB);
+		if (DSB == NULL) {
+			return;
+		}
+	}
+
+	lVolume += sglSoundVolume;
+	if (lVolume < VOLUME_MIN) {
+		lVolume = VOLUME_MIN;
+	} else if (lVolume > VOLUME_MAX) {
+		lVolume = VOLUME_MAX;
+	}
+	DSB->SetVolume(lVolume);
+	DSB->SetPan(lPan);
+
+	error_code = DSB->Play(0, 0, 0);
+
+	if (error_code != DSERR_BUFFERLOST) {
+		if (error_code != DS_OK) {
+			DSErrMsg(error_code, 261, "C:\\Src\\Diablo\\Source\\SOUND.CPP");
+		}
+	} else if (sound_file_reload(pSnd, DSB)) {
+		DSB->Play(0, 0, 0);
+	}
+
+	pSnd->start_tc = tc;
+}
+
+static void sound_CreateSoundBuffer(TSnd *sound_file)
+{
+	DSBUFFERDESC DSB;
+	HRESULT error_code;
+	memset(&DSB, 0, sizeof(DSBUFFERDESC));
+
+	DSB.dwSize = sizeof(DSBUFFERDESC);
+	DSB.dwFlags = DSBCAPS_CTRLVOLUME | DSBCAPS_CTRLPAN | DSBCAPS_STATIC;
+	DSB.dwBufferBytes = sound_file->chunk.dwSize;
+	DSB.lpwfxFormat = &sound_file->fmt;
+	error_code = sglpDS->CreateSoundBuffer(&DSB, &sound_file->DSB, NULL);
+	if (error_code != ERROR_SUCCESS)
+		DSErrMsg(error_code, 282, "C:\\Src\\Diablo\\Source\\SOUND.CPP");
+}
+
+TSnd *sound_file_load(const char *path)
+{
+	HANDLE file;
+	BYTE *wave_file;
+	TSnd *pSnd;
+	LPVOID buf1, buf2;
+	DWORD size1, size2;
+	HRESULT error_code;
+
+	if (!sglpDS)
+		return NULL;
+
+	WOpenFile(path, &file, FALSE);
+	pSnd = (TSnd *)DiabloAllocPtr(sizeof(TSnd));
+	memset(pSnd, 0, sizeof(TSnd));
+	pSnd->sound_path = path;
+	pSnd->start_tc = GetTickCount() - 80 - 1;
+
+	wave_file = LoadWaveFile(file, &pSnd->fmt, &pSnd->chunk);
+	if (!wave_file)
+		app_fatal("Invalid sound format on file %s", pSnd->sound_path);
+
+	sound_CreateSoundBuffer(pSnd);
+
+	error_code = pSnd->DSB->Lock(0, pSnd->chunk.dwSize, &buf1, &size1, &buf2, &size2, 0);
+	if (error_code != DS_OK)
+		DSErrMsg(error_code, 318, "C:\\Src\\Diablo\\Source\\SOUND.CPP");
+
+	memcpy(buf1, wave_file + pSnd->chunk.dwOffset, size1);
+
+	error_code = pSnd->DSB->Unlock(buf1, size1, buf2, size2);
+	if (error_code != DS_OK)
+		DSErrMsg(error_code, 325, "C:\\Src\\Diablo\\Source\\SOUND.CPP");
+
+	mem_free_dbg((void *)wave_file);
+	WCloseFile(file);
+
+	return pSnd;
+}
+
+void sound_file_cleanup(TSnd *sound_file)
+{
+	if (sound_file) {
+		if (sound_file->DSB) {
 			sound_file->DSB->Stop();
-			v1->DSB->Release();
-			v1->DSB = 0;
+			sound_file->DSB->Release();
+			sound_file->DSB = NULL;
 		}
-		mem_free_dbg(v1);
+
+		mem_free_dbg(sound_file);
 	}
 }
 
-void __fastcall snd_init(HWND hWnd)
+static void sound_create_primary_buffer(HANDLE music_track)
 {
-	sound_load_volume("Sound Volume", &sglSoundVolume);
-	gbSoundOn = sglSoundVolume > -1600;
-	sound_load_volume("Music Volume", &sglMusicVolume);
-	gbMusicOn = sglMusicVolume > -1600;
-	if ( sound_DirectSoundCreate(NULL, &sglpDS, NULL) )
-		sglpDS = 0;
-	if ( sglpDS && !sglpDS->SetCooperativeLevel(hWnd, DSSCL_EXCLUSIVE) )
-		sound_create_primary_buffer(0);
+	HRESULT error_code;
+	DSBUFFERDESC dsbuf;
+	WAVEFORMATEX format;
+
+	if (music_track == NULL) {
+		memset(&dsbuf, 0, sizeof(DSBUFFERDESC));
+		dsbuf.dwSize = sizeof(DSBUFFERDESC);
+		dsbuf.dwFlags = DSBCAPS_PRIMARYBUFFER;
+
+		error_code = sglpDS->CreateSoundBuffer(&dsbuf, &sglpDSB, NULL);
+		if (error_code != DS_OK)
+			DSErrMsg(error_code, 375, "C:\\Src\\Diablo\\Source\\SOUND.CPP");
+	}
+
+	if (sglpDSB) {
+		DSCAPS dsbcaps;
+		dsbcaps.dwSize = sizeof(DSCAPS);
+
+		error_code = sglpDS->GetCaps(&dsbcaps);
+		if (error_code != DS_OK)
+			DSErrMsg(error_code, 383, "C:\\Src\\Diablo\\Source\\SOUND.CPP");
+
+		if (!music_track || !LoadWaveFormat(music_track, &format)) {
+			memset(&format, 0, sizeof(WAVEFORMATEX));
+			format.wFormatTag = WAVE_FORMAT_PCM;
+			format.nSamplesPerSec = 22050;
+			format.wBitsPerSample = 16;
+			format.cbSize = 0;
+		}
+
+		format.nChannels = 2;
+		format.nBlockAlign = format.nChannels * format.wBitsPerSample / 8;
+		format.nAvgBytesPerSec = format.nSamplesPerSec * format.nBlockAlign;
+
+		sglpDSB->SetFormat(&format);
+	}
+}
+
+static HRESULT sound_DirectSoundCreate(LPGUID lpGuid, LPDIRECTSOUND *ppDS, LPUNKNOWN pUnkOuter)
+{
+	HRESULT(WINAPI * DirectSoundCreate)
+	(LPGUID lpGuid, LPDIRECTSOUND * ppDS, LPUNKNOWN pUnkOuter);
+
+	if (hDsound_dll == NULL) {
+		hDsound_dll = LoadLibrary("dsound.dll");
+	}
+	if (hDsound_dll == NULL) {
+		ErrDlg(IDD_DIALOG5, GetLastError(), "C:\\Src\\Diablo\\Source\\SOUND.CPP", 422);
+	}
+
+	DirectSoundCreate = (HRESULT(WINAPI *)(LPGUID, LPDIRECTSOUND *, LPUNKNOWN))GetProcAddress(hDsound_dll, "DirectSoundCreate");
+	if (DirectSoundCreate == NULL) {
+		ErrDlg(IDD_DIALOG5, GetLastError(), "C:\\Src\\Diablo\\Source\\SOUND.CPP", 427);
+	}
+	return DirectSoundCreate(lpGuid, ppDS, pUnkOuter);
+}
+
+void snd_init(HWND hWnd)
+{
+	int error_code;
+	snd_get_volume("Sound Volume", &sglSoundVolume);
+	gbSoundOn = sglSoundVolume > VOLUME_MIN;
+
+	snd_get_volume("Music Volume", &sglMusicVolume);
+	gbMusicOn = sglMusicVolume > VOLUME_MIN;
+
+	error_code = sound_DirectSoundCreate(NULL, &sglpDS, NULL);
+	if (error_code != DS_OK)
+		sglpDS = NULL;
+
+	if (sglpDS && sglpDS->SetCooperativeLevel(hWnd, DSSCL_EXCLUSIVE) == DS_OK)
+		sound_create_primary_buffer(NULL);
+
 	SVidInitialize(sglpDS);
 	SFileDdaInitialize(sglpDS);
-	gbSndInited = sglpDS != 0;
-}
-// 4A22D4: using guessed type char gbMusicOn;
-// 4A22D5: using guessed type char gbSoundOn;
 
-void __fastcall sound_load_volume(char *value_name, int *value)
-{
-	int *v2; // esi
-	//int v3; // eax
-	int v4; // ecx
-	int valuea; // [esp+8h] [ebp-4h]
-
-	v2 = value;
-	valuea = *value;
-	//_LOBYTE(v3) = SRegLoadValue("Diablo", value_name, 0, &valuea);
-	if ( SRegLoadValue("Diablo", value_name, 0, &valuea) )
-		v4 = valuea;
-	else
-		v4 = 0;
-	*v2 = v4;
-	if ( v4 >= -1600 )
-	{
-		if ( v4 > 0 )
-			*v2 = 0;
-	}
-	else
-	{
-		*v2 = -1600;
-	}
-	*v2 -= *v2 % 100;
+	gbSndInited = sglpDS != NULL;
 }
 
-void __fastcall sound_create_primary_buffer(int music_track)
+void sound_cleanup()
 {
-	int v1; // eax
-	int v2; // eax
-	DSCAPS v3; // [esp+4h] [ebp-8Ch]
-	DSBUFFERDESC v4; // [esp+64h] [ebp-2Ch]
-	int a1; // [esp+78h] [ebp-18h]
-	WAVEFORMATEX a2; // [esp+7Ch] [ebp-14h]
-
-	a1 = music_track;
-	if ( !music_track )
-	{
-		memset(&v4, 0, sizeof(DSBUFFERDESC));
-		v4.dwSize = sizeof(DSBUFFERDESC);
-		v4.dwFlags = DSBCAPS_PRIMARYBUFFER;
-		v1 = sglpDS->CreateSoundBuffer(&v4, &sglpDSB, NULL);
-		if ( v1 )
-			DSErrDlg(v1, 375, "C:\\Src\\Diablo\\Source\\SOUND.CPP");
-	}
-	if ( sglpDSB )
-	{
-		v3.dwSize = 96;
-		v2 = sglpDS->GetCaps(&v3);
-		if ( v2 )
-			DSErrDlg(v2, 383, "C:\\Src\\Diablo\\Source\\SOUND.CPP");
-		if ( !a1 || !LoadWaveFormat((HANDLE)a1, &a2) )
-		{
-			memset(&a2, 0, 0x12u);
-			a2.wFormatTag = WAVE_FORMAT_PCM;
-			a2.nSamplesPerSec = 22050;
-			a2.wBitsPerSample = 16;
-			a2.cbSize = 0;
-		}
-		a2.nChannels = 2;
-		a2.nBlockAlign = 2 * a2.wBitsPerSample / 8; // a2.nChannels * x / 8 (BUG_FIX: per MSDN)
-		a2.nAvgBytesPerSec = a2.nSamplesPerSec * a2.nBlockAlign;
-		sglpDSB->SetFormat(&a2);
-	}
-}
-// 69F100: using guessed type int sglpDSB;
-
-int __fastcall sound_DirectSoundCreate(GUID *guid, IDirectSound **DS, int always_null)
-{
-	IDirectSound **v3; // ebp
-	int v4; // eax
-	FARPROC v5; // ebx
-	int v6; // eax
-	GUID *v8; // [esp+10h] [ebp-4h]
-
-	v3 = DS;
-	v8 = guid;
-	if ( !hDsound_dll )
-	{
-		hDsound_dll = LoadLibraryA("dsound.dll");
-		if ( !hDsound_dll )
-		{
-			v4 = GetLastError();
-			TermDlg(108, v4, "C:\\Src\\Diablo\\Source\\SOUND.CPP", 422);
-		}
-	}
-	v5 = GetProcAddress(hDsound_dll, "DirectSoundCreate");
-	if ( !v5 )
-	{
-		v6 = GetLastError();
-		TermDlg(108, v6, "C:\\Src\\Diablo\\Source\\SOUND.CPP", 427);
-	}
-	return ((int (__stdcall *)(GUID *, IDirectSound **, int))v5)(v8, v3, always_null);
-}
-
-void __cdecl sound_cleanup()
-{
-	snd_update(1);
+	snd_update(TRUE);
 	SVidDestroy();
 	SFileDdaDestroy();
-	if ( sglpDS )
-	{
+
+	if (sglpDS) {
 		sglpDS->Release();
-		sglpDS = 0;
+		sglpDS = NULL;
 	}
-	if ( gbSndInited )
-	{
-		gbSndInited = 0;
-		sound_store_volume("Sound Volume", sglSoundVolume);
-		sound_store_volume("Music Volume", sglMusicVolume);
-	}
-}
 
-void __fastcall sound_store_volume(char *key, int value)
-{
-	SRegSaveValue("Diablo", key, 0, value);
-}
-
-void __cdecl music_stop()
-{
-	if ( sgpMusicTrack )
-	{
-		SFileDdaEnd(sgpMusicTrack);
-		SFileCloseFile(sgpMusicTrack);
-		sgpMusicTrack = 0;
-		sgnMusicTrack = 6;
+	if (gbSndInited) {
+		gbSndInited = FALSE;
+		snd_set_volume("Sound Volume", sglSoundVolume);
+		snd_set_volume("Music Volume", sglMusicVolume);
 	}
 }
 
-void __fastcall music_start(int nTrack)
+void music_stop()
 {
-	//int v1; // esi
-	//int v2; // eax
-	//int v3; // edi
+	if (sghMusic) {
+		SFileDdaEnd(sghMusic);
+		SFileCloseFile(sghMusic);
+		sghMusic = NULL;
+		sgnMusicTrack = NUM_MUSIC;
+	}
+}
 
-	//v1 = nTrack;
+void music_start(int nTrack)
+{
+	BOOL success;
+
+	assert((DWORD)nTrack < NUM_MUSIC);
 	music_stop();
-	if ( sglpDS && gbMusicOn )
-	{
-		//_LOBYTE(v2) = SFileOpenFile(sgszMusicTracks[v1], &sgpMusicTrack);
-		//v3 = v2;
-		sound_create_primary_buffer((int)sgpMusicTrack);
-		if ( SFileOpenFile(sgszMusicTracks[nTrack], &sgpMusicTrack) )
-		{
-			SFileDdaBeginEx(sgpMusicTrack, 0x40000, 0x40000, 0, sglMusicVolume, 0, 0);
+	if (sglpDS && gbMusicOn) {
+#ifdef _DEBUG
+		SFileEnableDirectAccess(FALSE);
+#endif
+		success = SFileOpenFile(sgszMusicTracks[nTrack], &sghMusic);
+#ifdef _DEBUG
+		SFileEnableDirectAccess(TRUE);
+#endif
+		sound_create_primary_buffer(sghMusic);
+		if (!success) {
+			sghMusic = NULL;
+		} else {
+			SFileDdaBeginEx(sghMusic, 0x40000, 0x40000, 0, sglMusicVolume, 0, 0);
 			sgnMusicTrack = nTrack;
 		}
-		else
-		{
-			sgpMusicTrack = 0;
-		}
 	}
 }
-// 4A22D4: using guessed type char gbMusicOn;
 
-void __fastcall sound_disable_music(bool disable)
+void sound_disable_music(BOOL disable)
 {
-	if ( disable )
-	{
+	if (disable) {
 		music_stop();
-	}
-	else if ( sgnMusicTrack != 6 )
-	{
+	} else if (sgnMusicTrack != NUM_MUSIC) {
 		music_start(sgnMusicTrack);
 	}
 }
 
-int __fastcall sound_get_or_set_music_volume(int volume)
+int sound_get_or_set_music_volume(int volume)
 {
-	if ( volume != 1 )
-	{
-		sglMusicVolume = volume;
-		if ( sgpMusicTrack )
-			SFileDdaSetVolume(sgpMusicTrack, volume, 0);
-	}
+	if (volume == 1)
+		return sglMusicVolume;
+
+	sglMusicVolume = volume;
+
+	if (sghMusic)
+		SFileDdaSetVolume(sghMusic, volume, 0);
+
 	return sglMusicVolume;
 }
 
-int __fastcall sound_get_or_set_sound_volume(int volume)
+int sound_get_or_set_sound_volume(int volume)
 {
-	int result; // eax
-
-	result = volume;
-	if ( volume == 1 )
+	if (volume == 1)
 		return sglSoundVolume;
+
 	sglSoundVolume = volume;
-	return result;
+
+	return sglSoundVolume;
 }

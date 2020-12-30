@@ -1,55 +1,38 @@
-//HEADER_GOES_HERE
+/**
+ * @file quests.cpp
+ *
+ * Interface of functionality for handling quests.
+ */
 #ifndef __QUESTS_H__
 #define __QUESTS_H__
 
-extern int qtopline; // idb
-extern int questlog; // weak
-extern void *pQLogCel;
-extern QuestStruct quests[16];
-extern int qline; // weak
-extern int qlist[16];
-extern int numqlines; // weak
-extern int WaterDone; // idb
-extern int ReturnLvlY; // idb
-extern int ReturnLvlX; // idb
-extern int ReturnLvlT; // idb
-extern int ALLQUESTS; // idb
-extern int ReturnLvl; // idb
+extern BOOL questlog;
+extern BYTE *pQLogCel;
+extern QuestStruct quests[MAXQUESTS];
+extern int ReturnLvlX;
+extern int ReturnLvlY;
+extern int ReturnLvlT;
+extern int ReturnLvl;
 
-void __cdecl InitQuests();
-void __cdecl CheckQuests();
-bool __cdecl ForceQuests();
-bool __fastcall QuestStatus(int i);
-void __fastcall CheckQuestKill(int m, unsigned char sendmsg);
-void __cdecl DrawButcher();
-void __fastcall DrawSkelKing(int quest_id, int xx, int yy);
-void __fastcall DrawWarLord(int xx, int yy);
-void __fastcall DrawSChamber(int quest_id, int xx, int yy);
-void __fastcall DrawLTBanner(int xx, int yy);
-void __fastcall DrawBlind(int xx, int yy);
-void __fastcall DrawBlood(int xx, int yy);
-void __fastcall DRLG_CheckQuests(int xx, int yy);
-void __cdecl SetReturnLvlPos();
-void __cdecl GetReturnLvlPos();
-void __cdecl ResyncMPQuests();
-void __cdecl ResyncQuests();
-void __fastcall PrintQLString(int x, int y, unsigned char cjustflag, char *str, int col);
-void __cdecl DrawQuestLog();
-void __cdecl StartQuestlog();
-void __cdecl QuestlogUp();
-void __cdecl QuestlogDown();
-void __cdecl QuestlogEnter();
-void __cdecl QuestlogESC();
-void __fastcall SetMultiQuest(int q, int s, unsigned char l, int v1);
+void InitQuests();
+void CheckQuests();
+BOOL ForceQuests();
+BOOL QuestStatus(int i);
+void CheckQuestKill(int m, BOOL sendmsg);
+void DRLG_CheckQuests(int x, int y);
+void SetReturnLvlPos();
+void GetReturnLvlPos();
+void ResyncMPQuests();
+void ResyncQuests();
+void DrawQuestLog();
+void StartQuestlog();
+void QuestlogUp();
+void QuestlogDown();
+void QuestlogEnter();
+void QuestlogESC();
+void SetMultiQuest(int q, int s, int l, int v1);
 
 /* rdata */
-extern QuestData questlist[16];
-extern char questxoff[7];
-extern char questyoff[7];
-extern char *questtrigstr[5];
-extern int QuestGroup1[3];
-extern int QuestGroup2[3];
-extern int QuestGroup3[3];
-extern int QuestGroup4[2];
+extern QuestData questlist[MAXQUESTS];
 
 #endif /* __QUESTS_H__ */

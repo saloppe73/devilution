@@ -1,45 +1,29 @@
-//HEADER_GOES_HERE
+/**
+ * @file init.h
+ *
+ * Interface of routines for initializing the environment, disable screen saver, load MPQ.
+ */
 #ifndef __INIT_H__
 #define __INIT_H__
 
 extern _SNETVERSIONDATA fileinfo;
-extern int init_cpp_init_value; // weak
-extern int window_activated; // weak
-extern char diablo_exe_path[260];
-extern void *unused_mpq;
-extern char patch_rt_mpq_path[260];
-extern LRESULT (__stdcall *CurrentProc)(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-extern void *diabdat_mpq;
-extern char diabdat_mpq_path[260];
-extern void *patch_rt_mpq;
-extern int killed_mom_parent; // weak
-extern bool screensaver_enabled_prev;
+extern int gbActive;
+extern WNDPROC CurrentProc;
+extern HANDLE diabdat_mpq;
+#ifdef HELLFIRE
+extern HANDLE hfbard_mpq;
+extern HANDLE hfbarb_mpq;
+#endif
 
-void __cdecl init_cpp_init();
-void __fastcall init_cleanup(bool show_cursor);
-void __cdecl init_run_office_from_start_menu();
-void __fastcall init_run_office(char *dir);
-void __fastcall init_disable_screensaver(bool disable);
-void __cdecl init_create_window();
-void __cdecl init_kill_mom_parent();
-HWND __cdecl init_find_mom_parent();
-void __cdecl init_await_mom_parent_exit();
-void __cdecl init_archives();
-void *__fastcall init_test_access(char *mpq_path, char *mpq_name, char *reg_loc, int flags, bool on_cd);
-char *__fastcall init_strip_trailing_slash(char *path);
-int __fastcall init_read_test_file(char *mpq_path, char *mpq_name, int flags, void **archive);
-void __cdecl init_get_file_info();
-LRESULT __stdcall init_palette(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
-void __fastcall init_activate_window(HWND hWnd, bool activated);
-LRESULT __stdcall init_redraw_window(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
-LRESULT (__stdcall *SetWindowProc(void *func))(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+void init_cleanup(BOOL show_cursor);
+void init_create_window(int nCmdShow);
+LRESULT __stdcall MainWndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
+LRESULT __stdcall WindowProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
+WNDPROC SetWindowProc(WNDPROC NewProc);
 
 /* data */
-extern int init_inf; // weak
 
-/* rdata */
-
-extern char gszVersionNumber[260];
-extern char gszProductName[260];
+extern char gszVersionNumber[MAX_PATH];
+extern char gszProductName[MAX_PATH];
 
 #endif /* __INIT_H__ */

@@ -1,133 +1,120 @@
-//HEADER_GOES_HERE
+/**
+ * @file portal.cpp
+ *
+ * Implementation of functionality for handling town portals.
+ */
+#include "all.h"
 
-#include "../types.h"
-
-PortalStruct portal[4];
+/** In-game state of portals. */
+PortalStruct portal[MAXPORTAL];
+/** Current portal number (a portal array index). */
 int portalindex;
 
-int WarpDropX[4] = { 57, 59, 61, 63 };
-int WarpDropY[4] = { 40, 40, 40, 40 };
+/** X-coordinate of each players portal in town. */
+int WarpDropX[MAXPORTAL] = { 57, 59, 61, 63 };
+/** Y-coordinate of each players portal in town. */
+int WarpDropY[MAXPORTAL] = { 40, 40, 40, 40 };
 
-void __cdecl InitPortals()
+void InitPortals()
 {
-	int i; // edi
+	int i;
 
-	for(i = 0; i < 4; i++)
-	{
-		if(delta_portal_inited(i))
-			portal[i].open = 0;
+	for (i = 0; i < MAXPORTAL; i++) {
+		if (delta_portal_inited(i))
+			portal[i].open = FALSE;
 	}
 }
 
-void __fastcall SetPortalStats(int i, int o, int x, int y, int lvl, int lvltype)
+void SetPortalStats(int i, BOOL o, int x, int y, int lvl, int lvltype)
 {
-	portal[i].x = x;
-	portal[i].setlvl = 0;
-	portal[i].y = y;
 	portal[i].open = o;
+	portal[i].x = x;
+	portal[i].y = y;
 	portal[i].level = lvl;
 	portal[i].ltype = lvltype;
+	portal[i].setlvl = FALSE;
 }
 
-void __fastcall AddWarpMissile(int i, int x, int y)
+void AddWarpMissile(int i, int x, int y)
 {
-	int mi; // eax
+	int mi;
 
 	missiledata[MIS_TOWN].mlSFX = -1;
 	dMissile[x][y] = 0;
-	mi = AddMissile(0, 0, x, y, 0, MIS_TOWN, 0, i, 0, 0);
+	mi = AddMissile(0, 0, x, y, 0, MIS_TOWN, TARGET_MONSTERS, i, 0, 0);
 
-	if ( mi != -1 )
-	{
+	if (mi != -1) {
 		SetMissDir(mi, 1);
 
-		if ( currlevel )
+		if (currlevel != 0)
 			missile[mi]._mlid = AddLight(missile[mi]._mix, missile[mi]._miy, 15);
 
 		missiledata[MIS_TOWN].mlSFX = LS_SENTINEL;
 	}
 }
 
-void __cdecl SyncPortals()
+void SyncPortals()
 {
-	int v0; // edi
-	int *v1; // esi
-	int v2; // eax
+	int i;
 
-	v0 = 0;
-	v1 = &portal[0].level;
-	do
-	{
-		if ( *(v1 - 3) )
-		{
-			if ( currlevel )
-			{
-				v2 = currlevel;
-				if ( setlevel )
-					v2 = (unsigned char)setlvlnum;
-				if ( *v1 == v2 )
-					AddWarpMissile(v0, *(v1 - 2), *(v1 - 1));
-			}
-			else
-			{
-				AddWarpMissile(v0, WarpDropX[v0], WarpDropY[v0]);
-			}
+	for (i = 0; i < MAXPORTAL; i++) {
+		if (!portal[i].open)
+			continue;
+		if (currlevel == 0)
+			AddWarpMissile(i, WarpDropX[i], WarpDropY[i]);
+		else {
+			int lvl = currlevel;
+			if (setlevel)
+				lvl = setlvlnum;
+			if (portal[i].level == lvl)
+				AddWarpMissile(i, portal[i].x, portal[i].y);
 		}
-		v1 += 6;
-		++v0;
 	}
-	while ( (signed int)v1 < (signed int)&portal[4].level );
 }
-// 5CCB10: using guessed type char setlvlnum;
-// 5CF31D: using guessed type char setlevel;
-// 69BD04: using guessed type int questlog;
 
-void __fastcall AddInTownPortal(int i)
+void AddInTownPortal(int i)
 {
 	AddWarpMissile(i, WarpDropX[i], WarpDropY[i]);
 }
 
-void __fastcall ActivatePortal(int i, int x, int y, int lvl, int lvltype, int sp)
+void ActivatePortal(int i, int x, int y, int lvl, int lvltype, BOOL sp)
 {
-	portal[i].open = 1;
+	portal[i].open = TRUE;
 
-	if ( lvl )
-	{
-		portal[i].level = lvl;
+	if (lvl != 0) {
 		portal[i].x = x;
-		portal[i].ltype = lvltype;
 		portal[i].y = y;
+		portal[i].level = lvl;
+		portal[i].ltype = lvltype;
 		portal[i].setlvl = sp;
 	}
 }
 
-void __fastcall DeactivatePortal(int i)
+void DeactivatePortal(int i)
 {
-	portal[i].open = 0;
+	portal[i].open = FALSE;
 }
 
-bool __fastcall PortalOnLevel(int i)
+BOOL PortalOnLevel(int i)
 {
-	if ( portal[i].level == currlevel )
-		return 1;
+	if (portal[i].level == currlevel)
+		return TRUE;
 	else
 		return currlevel == 0;
 }
 
-void __fastcall RemovePortalMissile(int id)
+void RemovePortalMissile(int id)
 {
-	int i; // esi
-	int mi; // eax
+	int i;
+	int mi;
 
-	for ( i = 0; i < nummissiles; ++i )
-	{
+	for (i = 0; i < nummissiles; i++) {
 		mi = missileactive[i];
-		if ( missile[mi]._mitype == MIS_TOWN && missile[mi]._misource == id )
-		{
-			dFlags[missile[mi]._mix][missile[mi]._miy] &= 0xFE;
+		if (missile[mi]._mitype == MIS_TOWN && missile[mi]._misource == id) {
+			dFlags[missile[mi]._mix][missile[mi]._miy] &= ~BFLAG_MISSILE;
 			dMissile[missile[mi]._mix][missile[mi]._miy] = 0;
 
-			if ( portal[id].level )
+			if (portal[id].level != 0)
 				AddUnLight(missile[mi]._mlid);
 
 			DeleteMissile(mi, i);
@@ -135,78 +122,61 @@ void __fastcall RemovePortalMissile(int id)
 	}
 }
 
-void __fastcall SetCurrentPortal(int p)
+void SetCurrentPortal(int p)
 {
 	portalindex = p;
 }
 
-void __cdecl GetPortalLevel()
+void GetPortalLevel()
 {
-	if ( currlevel )
-	{
-		setlevel = 0;
+	if (currlevel != 0) {
+		setlevel = FALSE;
 		currlevel = 0;
-		leveltype = 0;
 		plr[myplr].plrlevel = 0;
-	}
-	else
-	{
-		if ( portal[portalindex].setlvl )
-		{
-			setlevel = 1;
+		leveltype = DTYPE_TOWN;
+	} else {
+		if (portal[portalindex].setlvl) {
+			setlevel = TRUE;
 			setlvlnum = portal[portalindex].level;
+			currlevel = portal[portalindex].level;
+			plr[myplr].plrlevel = setlvlnum;
+			leveltype = portal[portalindex].ltype;
+		} else {
+			setlevel = FALSE;
+			currlevel = portal[portalindex].level;
+			plr[myplr].plrlevel = currlevel;
+			leveltype = portal[portalindex].ltype;
 		}
-		else
-		{
-			setlevel = 0;
-		}
-
-		currlevel = portal[portalindex].level;
-		leveltype = portal[portalindex].ltype;
-		plr[myplr].plrlevel = portal[portalindex].level;
-
-		if ( portalindex == myplr )
-		{
-			NetSendCmd(1, CMD_DEACTIVATEPORTAL);
+		if (portalindex == myplr) {
+			NetSendCmd(TRUE, CMD_DEACTIVATEPORTAL);
 			DeactivatePortal(portalindex);
 		}
 	}
 }
-// 5BB1ED: using guessed type char leveltype;
-// 5CCB10: using guessed type char setlvlnum;
-// 5CF31D: using guessed type char setlevel;
 
-void __cdecl GetPortalLvlPos()
+void GetPortalLvlPos()
 {
-	if ( currlevel )
-	{
+	if (currlevel == 0) {
+		ViewX = WarpDropX[portalindex] + 1;
+		ViewY = WarpDropY[portalindex] + 1;
+	} else {
 		ViewX = portal[portalindex].x;
 		ViewY = portal[portalindex].y;
 
-		if ( portalindex != myplr )
-		{
+		if (portalindex != myplr) {
 			ViewX++;
 			ViewY++;
 		}
 	}
-	else
-	{
-		ViewX = WarpDropX[portalindex] + 1;
-		ViewY = WarpDropY[portalindex] + 1;
-	}
 }
 
-bool __fastcall PosOkPortal(int level, int x, int y)
+BOOL PosOkPortal(int lvl, int x, int y)
 {
-	int *v3; // eax
+	int i;
 
-	v3 = &portal[0].x;
-	while ( !*(v3 - 1) || v3[2] != level || (*v3 != x || v3[1] != y) && (*v3 != x - 1 || v3[1] != y - 1) )
-	{
-		v3 += 6;
-		if ( (signed int)v3 >= (signed int)&portal[4].x )
-			return 0;
+	for (i = 0; i < MAXPORTAL; i++) {
+		if (portal[i].open && portal[i].level == lvl && ((portal[i].x == x && portal[i].y == y) || (portal[i].x == x - 1 && portal[i].y == y - 1)))
+			return TRUE;
 	}
-	return 1;
+	return FALSE;
 }
-// 69BCFC: using guessed type int END_portalstruct;

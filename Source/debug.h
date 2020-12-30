@@ -1,24 +1,32 @@
-//HEADER_GOES_HERE
+/**
+ * @file debug.h
+ *
+ * Interface of debug functions.
+ */
 #ifndef __DEBUG_H__
 #define __DEBUG_H__
 
-extern void *pSquareCel;
-extern char dMonsDbg[17][112][112];
-extern char dFlagDbg[17][112][112];
+extern BYTE *pSquareCel;
 
-void __cdecl LoadDebugGFX();
-void __cdecl FreeDebugGFX();
-void __cdecl CheckDungeonClear();
+void LoadDebugGFX();
+void FreeDebugGFX();
 #ifdef _DEBUG
-void __cdecl GiveGoldCheat();
-void __cdecl StoresCheat();
-void __cdecl TakeGoldCheat();
-void __cdecl MaxSpellsCheat();
-void __fastcall PrintDebugPlayer(bool bNextPlayer);
-void __cdecl PrintDebugQuest();
-void __fastcall PrintDebugMonster(int m);
-void __cdecl GetDebugMonster();
-void __cdecl NextDebugMonster();
+void init_seed_desync();
+void seed_desync_index_get();
+void seed_desync_index_set();
+void seed_desync_check(int seed);
+#endif
+void CheckDungeonClear();
+#ifdef _DEBUG
+void GiveGoldCheat();
+void StoresCheat();
+void TakeGoldCheat();
+void MaxSpellsCheat();
+void SetAllSpellsCheat();
+void PrintDebugPlayer(BOOL bNextPlayer);
+void PrintDebugQuest();
+void GetDebugMonster();
+void NextDebugMonster();
 #endif
 
 #endif /* __DEBUG_H__ */

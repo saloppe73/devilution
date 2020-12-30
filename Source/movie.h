@@ -1,17 +1,14 @@
-//HEADER_GOES_HERE
+/**
+ * @file movie.h
+ *
+ * Interface of video playback.
+ */
 #ifndef __MOVIE_H__
 #define __MOVIE_H__
 
-extern int movie_cpp_init_value; // weak
-extern char movie_playing; // weak
-extern int loop_movie; // weak
+extern BOOL loop_movie;
 
-void __cdecl movie_cpp_init();
-void __fastcall play_movie(char *pszMovie, bool user_can_close);
+void play_movie(const char *pszMovie, BOOL user_can_close);
 LRESULT __stdcall MovieWndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
-
-/* data */
-
-extern int movie_inf; // weak
 
 #endif /* __MOVIE_H__ */

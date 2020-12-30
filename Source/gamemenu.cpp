@@ -1,327 +1,400 @@
-//HEADER_GOES_HERE
 
-#include "../types.h"
+/**
+ * @file gamemenu.cpp
+ *
+ * Implementation of the in-game menu functions.
+ */
+#include "all.h"
+#include "../3rdParty/Storm/Source/storm.h"
 
-TMenuItem sgSingleMenu[6] =
-{
-  { 0x80000000, "Save Game", &gamemenu_save_game },
-  { 0x80000000, "Options", &gamemenu_options },
-  { 0x80000000, "New Game", &gamemenu_new_game },
-  { 0x80000000, "Load Game", &gamemenu_load_game },
-  { 0x80000000, "Quit Diablo", &gamemenu_quit_game },
-  { 0x80000000, NULL, NULL }
+#ifdef HELLFIRE
+BOOL jogging_opt = TRUE;
+#endif
+
+/** Contains the game menu items of the single player menu. */
+TMenuItem sgSingleMenu[] = {
+	// clang-format off
+//	  dwFlags,       pszStr,         fnMenu
+	{ GMENU_ENABLED, "Save Game",     &gamemenu_save_game  },
+	{ GMENU_ENABLED, "Options",       &gamemenu_options    },
+	{ GMENU_ENABLED, "New Game",      &gamemenu_new_game   },
+	{ GMENU_ENABLED, "Load Game",     &gamemenu_load_game  },
+#ifndef HELLFIRE
+	{ GMENU_ENABLED, "Quit Diablo",   &gamemenu_quit_game  },
+#else
+	{ GMENU_ENABLED, "Quit Hellfire", &gamemenu_quit_game  },
+#endif
+	{ GMENU_ENABLED, NULL,            NULL }
+	// clang-format on
 };
-TMenuItem sgMultiMenu[5] =
-{
-  { 0x80000000, "Options", &gamemenu_options },
-  { 0x80000000, "New Game", &gamemenu_new_game },
-  { 0x80000000, "Restart In Town", &gamemenu_restart_town },
-  { 0x80000000, "Quit Diablo", &gamemenu_quit_game },
-  { 0x80000000, NULL, NULL }
+/** Contains the game menu items of the multi player menu. */
+TMenuItem sgMultiMenu[] = {
+	// clang-format off
+//	  dwFlags,       pszStr,            fnMenu
+	{ GMENU_ENABLED, "Options",         &gamemenu_options      },
+	{ GMENU_ENABLED, "New Game",        &gamemenu_new_game     },
+	{ GMENU_ENABLED, "Restart In Town", &gamemenu_restart_town },
+#ifndef HELLFIRE
+	{ GMENU_ENABLED, "Quit Diablo",     &gamemenu_quit_game    },
+#else
+	{ GMENU_ENABLED, "Quit Hellfire",   &gamemenu_quit_game    },
+#endif
+	{ GMENU_ENABLED, NULL,              NULL                   },
+	// clang-format on
 };
-TMenuItem sgOptionMenu[6] =
-{
-  { 0xC0000000, NULL, (void (__cdecl *)(void))&gamemenu_music_volume },
-  { 0xC0000000, NULL, (void (__cdecl *)(void))&gamemenu_sound_volume },
-  { 0xC0000000, "Gamma", (void (__cdecl *)(void))&gamemenu_gamma },
-  { 0x80000000, NULL, &gamemenu_color_cycling },
-  { 0x80000000, "Previous Menu", &gamemenu_previous },
-  { 0x80000000, NULL, NULL }
+TMenuItem sgOptionsMenu[] = {
+	// clang-format off
+//	  dwFlags,                      pszStr,          fnMenu
+	{ GMENU_ENABLED | GMENU_SLIDER, NULL,            &gamemenu_music_volume  },
+	{ GMENU_ENABLED | GMENU_SLIDER, NULL,            &gamemenu_sound_volume  },
+	{ GMENU_ENABLED | GMENU_SLIDER, "Gamma",         &gamemenu_gamma         },
+#ifndef HELLFIRE
+	{ GMENU_ENABLED               , NULL,            &gamemenu_color_cycling },
+#else
+	{ GMENU_ENABLED | GMENU_SLIDER, NULL,            &gamemenu_loadjog       },
+#endif
+	{ GMENU_ENABLED               , "Previous Menu", &gamemenu_previous      },
+	{ GMENU_ENABLED               , NULL,            NULL                    },
+	// clang-format on
 };
-char *music_toggle_names[] = { "Music", "Music Disabled" };
-char *sound_toggle_names[] = { "Sound", "Sound Disabled" };
-char *color_cycling_toggle_names[] = { "Color Cycling Off", "Color Cycling On" };
+/** Specifies the menu names for music enabled and disabled. */
+const char *const music_toggle_names[] = {
+	"Music",
+	"Music Disabled",
+};
+/** Specifies the menu names for sound enabled and disabled. */
+const char *const sound_toggle_names[] = {
+	"Sound",
+	"Sound Disabled",
+};
+#ifdef HELLFIRE
+char *jogging_toggle_names[] = {
+	"Jog",
+	"Walk",
+};
+char *jogging_title = "Fast Walk";
+#endif
+#ifndef HELLFIRE
+/** Specifies the menu names for colour cycling disabled and enabled. */
+const char *const color_cycling_toggle_names[] = { "Color Cycling Off", "Color Cycling On" };
+#endif
 
-void __cdecl gamemenu_previous()
+static void gamemenu_update_single(TMenuItem *pMenuItems)
 {
-	void (__cdecl *v0)(); // edx
-	TMenuItem *v1; // ecx
-
-	if ( gbMaxPlayers == 1 )
-	{
-		v0 = gamemenu_enable_single;
-		v1 = sgSingleMenu;
-	}
-	else
-	{
-		v0 = gamemenu_enable_multi;
-		v1 = sgMultiMenu;
-	}
-	gmenu_call_proc(v1, v0);
-	PressEscKey();
-}
-// 679660: using guessed type char gbMaxPlayers;
-
-void __cdecl gamemenu_enable_single()
-{
-	bool v0; // dl
+	BOOL enable;
 
 	gmenu_enable(&sgSingleMenu[3], gbValidSaveFile);
-	v0 = 0;
-	if ( plr[myplr]._pmode != PM_DEATH && !deathflag )
-		v0 = 1;
-	gmenu_enable(sgSingleMenu, v0);
+
+	enable = FALSE;
+	if (plr[myplr]._pmode != PM_DEATH && !deathflag)
+		enable = TRUE;
+
+	gmenu_enable(&sgSingleMenu[0], enable);
 }
 
-void __cdecl gamemenu_enable_multi()
+static void gamemenu_update_multi(TMenuItem *pMenuItems)
 {
 	gmenu_enable(&sgMultiMenu[2], deathflag);
 }
 
-void __cdecl gamemenu_off()
+void gamemenu_on()
 {
-	gmenu_call_proc(0, 0);
+	if (gbMaxPlayers == 1) {
+		gmenu_set_items(sgSingleMenu, gamemenu_update_single);
+	} else {
+		gmenu_set_items(sgMultiMenu, gamemenu_update_multi);
+	}
+	PressEscKey();
 }
 
-void __cdecl gamemenu_handle_previous()
+void gamemenu_off()
 {
-	if ( gmenu_exception() )
+	gmenu_set_items(NULL, NULL);
+}
+
+void gamemenu_handle_previous()
+{
+	if (gmenu_is_active())
 		gamemenu_off();
 	else
-		gamemenu_previous();
+		gamemenu_on();
 }
 
-void __cdecl gamemenu_new_game()
+void gamemenu_previous(BOOL bActivate)
 {
-	int i; // eax
+	gamemenu_on();
+}
 
-	for(i = 0; i < 4; i++)
-	{
+void gamemenu_new_game(BOOL bActivate)
+{
+	int i;
+
+	for (i = 0; i < MAX_PLRS; i++) {
 		plr[i]._pmode = PM_QUIT;
-		plr[i]._pInvincible = 1;
+		plr[i]._pInvincible = TRUE;
 	}
 
-	deathflag = 0;
-	drawpanflag = 255;
-	scrollrt_draw_game_screen(1);
-	gbRunGame = 0;
+	deathflag = FALSE;
+	force_redraw = 255;
+	scrollrt_draw_game_screen(TRUE);
+#ifdef HELLFIRE
+	CornerStone.activated = FALSE;
+#endif
+	gbRunGame = FALSE;
 	gamemenu_off();
 }
-// 525650: using guessed type int gbRunGame;
-// 52571C: using guessed type int drawpanflag;
 
-void __cdecl gamemenu_quit_game()
+void gamemenu_quit_game(BOOL bActivate)
 {
-	gamemenu_new_game();
-	gbRunGameResult = 0;
+	gamemenu_new_game(bActivate);
+	gbRunGameResult = FALSE;
 }
-// 525698: using guessed type int gbRunGameResult;
 
-void __cdecl gamemenu_load_game()
+void gamemenu_load_game(BOOL bActivate)
 {
-	LRESULT (__stdcall *saveProc)(HWND, UINT, WPARAM, LPARAM); // edi
-
-	saveProc = SetWindowProc(DisableInputWndProc);
+	WNDPROC saveProc = SetWindowProc(DisableInputWndProc);
 	gamemenu_off();
-	SetCursor(0);
-	InitDiabloMsg(10);
-	drawpanflag = 255;
+	SetCursor_(CURSOR_NONE);
+	InitDiabloMsg(EMSG_LOADING);
+	force_redraw = 255;
 	DrawAndBlit();
-	LoadGame(0);
+	LoadGame(FALSE);
 	ClrDiabloMsg();
+#ifdef HELLFIRE
+	CornerStone.activated = FALSE;
+#endif
 	PaletteFadeOut(8);
-	deathflag = 0;
-	drawpanflag = 255;
+	deathflag = FALSE;
+	force_redraw = 255;
 	DrawAndBlit();
 	PaletteFadeIn(8);
-	SetCursor(CURSOR_HAND);
+	SetCursor_(CURSOR_HAND);
 	interface_msg_pump();
 	SetWindowProc(saveProc);
 }
-// 52571C: using guessed type int drawpanflag;
 
-void __cdecl gamemenu_save_game()
+void gamemenu_save_game(BOOL bActivate)
 {
-	LRESULT (__stdcall *saveProc)(HWND, UINT, WPARAM, LPARAM); // edi
-
-	if ( pcurs == CURSOR_HAND )
-	{
-		if ( plr[myplr]._pmode == PM_DEATH || deathflag )
-		{
-			gamemenu_off();
-		}
-		else
-		{
-			saveProc = SetWindowProc(DisableInputWndProc);
-			SetCursor(0);
-			gamemenu_off();
-			InitDiabloMsg(11);
-			drawpanflag = 255;
-			DrawAndBlit();
-			SaveGame();
-			ClrDiabloMsg();
-			drawpanflag = 255;
-			SetCursor(CURSOR_HAND);
-			interface_msg_pump();
-			SetWindowProc(saveProc);
-		}
+	if (pcurs != CURSOR_HAND) {
+		return;
 	}
-}
-// 52571C: using guessed type int drawpanflag;
 
-void __cdecl gamemenu_restart_town()
+	if (plr[myplr]._pmode == PM_DEATH || deathflag) {
+		gamemenu_off();
+		return;
+	}
+
+	WNDPROC saveProc = SetWindowProc(DisableInputWndProc);
+	SetCursor_(CURSOR_NONE);
+	gamemenu_off();
+	InitDiabloMsg(EMSG_SAVING);
+	force_redraw = 255;
+	DrawAndBlit();
+	SaveGame();
+	ClrDiabloMsg();
+	force_redraw = 255;
+	SetCursor_(CURSOR_HAND);
+#ifdef HELLFIRE
+	if (CornerStone.activated) {
+		items_427A72();
+	}
+#endif
+	interface_msg_pump();
+	SetWindowProc(saveProc);
+}
+
+void gamemenu_restart_town(BOOL bActivate)
 {
-	NetSendCmd(1u, CMD_RETOWN);
+	NetSendCmd(TRUE, CMD_RETOWN);
 }
 
-void __cdecl gamemenu_options()
+static void gamemenu_sound_music_toggle(const char *const *names, TMenuItem *menu_item, int volume)
+{
+	if (gbSndInited) {
+		menu_item->dwFlags |= GMENU_ENABLED | GMENU_SLIDER;
+		menu_item->pszStr = *names;
+		gmenu_slider_steps(menu_item, 17);
+		gmenu_slider_set(menu_item, VOLUME_MIN, VOLUME_MAX, volume);
+		return;
+	}
+
+	menu_item->dwFlags &= ~(GMENU_ENABLED | GMENU_SLIDER);
+	menu_item->pszStr = names[1];
+}
+
+static int gamemenu_slider_music_sound(TMenuItem *menu_item)
+{
+	return gmenu_slider_get(menu_item, VOLUME_MIN, VOLUME_MAX);
+}
+
+static void gamemenu_get_music()
+{
+	gamemenu_sound_music_toggle(music_toggle_names, sgOptionsMenu, sound_get_or_set_music_volume(1));
+}
+
+static void gamemenu_get_sound()
+{
+	gamemenu_sound_music_toggle(sound_toggle_names, &sgOptionsMenu[1], sound_get_or_set_sound_volume(1));
+}
+
+#ifdef HELLFIRE
+static void gamemenu_jogging()
+{
+	gmenu_slider_steps(&sgOptionsMenu[3], 2);
+	gmenu_slider_set(&sgOptionsMenu[3], 0, 1, jogging_opt);
+	sgOptionsMenu[3].pszStr = jogging_toggle_names[!jogging_opt ? 1 : 0];
+}
+#endif
+
+static void gamemenu_get_gamma()
+{
+	gmenu_slider_steps(&sgOptionsMenu[2], 15);
+	gmenu_slider_set(&sgOptionsMenu[2], 30, 100, UpdateGamma(0));
+}
+
+#ifndef HELLFIRE
+static void gamemenu_get_color_cycling()
+{
+	sgOptionsMenu[3].pszStr = color_cycling_toggle_names[palette_get_color_cycling() & 1];
+}
+#endif
+
+static int gamemenu_slider_gamma()
+{
+	return gmenu_slider_get(&sgOptionsMenu[2], 30, 100);
+}
+
+void gamemenu_options(BOOL bActivate)
 {
 	gamemenu_get_music();
 	gamemenu_get_sound();
+#ifdef HELLFIRE
+	gamemenu_jogging();
+#endif
 	gamemenu_get_gamma();
+#ifndef HELLFIRE
 	gamemenu_get_color_cycling();
-	gmenu_call_proc(sgOptionMenu, 0);
+#endif
+	gmenu_set_items(sgOptionsMenu, NULL);
 }
 
-void __cdecl gamemenu_get_music()
+void gamemenu_music_volume(BOOL bActivate)
 {
-	gamemenu_sound_music_toggle(music_toggle_names, sgOptionMenu, sound_get_or_set_music_volume(1));
-}
+	int volume;
 
-void __fastcall gamemenu_sound_music_toggle(char **names, TMenuItem *menu_item, int gamma)
-{
-	if ( gbSndInited )
-	{
-		menu_item->dwFlags |= 0xC0000000;
-		menu_item->pszStr = *names;
-		gmenu_slider_3(menu_item, 17);
-		gmenu_slider_1(menu_item, -1600, 0, gamma);
-	}
-	else
-	{
-		menu_item->dwFlags &= 0x3F000000;
-		menu_item->pszStr = names[1];
-	}
-}
-
-void __cdecl gamemenu_get_sound()
-{
-	gamemenu_sound_music_toggle(sound_toggle_names, &sgOptionMenu[1], sound_get_or_set_sound_volume(1));
-}
-
-void __cdecl gamemenu_get_color_cycling()
-{
-	sgOptionMenu[3].pszStr = color_cycling_toggle_names[palette_get_colour_cycling()];
-}
-
-void __cdecl gamemenu_get_gamma()
-{
-	gmenu_slider_3(&sgOptionMenu[2], 15);
-	gmenu_slider_1(&sgOptionMenu[2], 30, 100, palette_update_gamma(0));
-}
-
-void __fastcall gamemenu_music_volume(int a1)
-{
-	int v1; // esi
-
-	if ( a1 )
-	{
-		if ( gbMusicOn )
-		{
-			gbMusicOn = 0;
+	if (bActivate) {
+		if (gbMusicOn) {
+			gbMusicOn = FALSE;
 			music_stop();
-			sound_get_or_set_music_volume(-1600);
-			goto LABEL_11;
+			sound_get_or_set_music_volume(VOLUME_MIN);
+		} else {
+			gbMusicOn = TRUE;
+			sound_get_or_set_music_volume(VOLUME_MAX);
+#ifdef HELLFIRE
+			int lt;
+			if (currlevel >= 17) {
+				if (currlevel > 20)
+					lt = DTYPE_NEST;
+				else
+					lt = DTYPE_CRYPT;
+			} else
+				lt = leveltype;
+			music_start(lt);
+#else
+			music_start(leveltype);
+#endif
 		}
-		gbMusicOn = 1;
-		sound_get_or_set_music_volume(0);
-LABEL_10:
-		music_start((unsigned char)leveltype);
-		goto LABEL_11;
+	} else {
+		volume = gamemenu_slider_music_sound(&sgOptionsMenu[0]);
+		sound_get_or_set_music_volume(volume);
+		if (volume == VOLUME_MIN) {
+			if (gbMusicOn) {
+				gbMusicOn = FALSE;
+				music_stop();
+			}
+		} else if (!gbMusicOn) {
+			gbMusicOn = TRUE;
+#ifdef HELLFIRE
+			int lt;
+			if (currlevel >= 17) {
+				if (currlevel > 20)
+					lt = DTYPE_NEST;
+				else
+					lt = DTYPE_CRYPT;
+			} else
+				lt = leveltype;
+			music_start(lt);
+#else
+			music_start(leveltype);
+#endif
+		}
 	}
-	v1 = gamemenu_slider_music_sound(sgOptionMenu);
-	sound_get_or_set_music_volume(v1);
-	if ( v1 != -1600 )
-	{
-		if ( gbMusicOn )
-			goto LABEL_11;
-		gbMusicOn = 1;
-		goto LABEL_10;
-	}
-	if ( gbMusicOn )
-	{
-		gbMusicOn = 0;
-		music_stop();
-	}
-LABEL_11:
 	gamemenu_get_music();
 }
-// 4A22D4: using guessed type char gbMusicOn;
-// 5BB1ED: using guessed type char leveltype;
 
-int __fastcall gamemenu_slider_music_sound(TMenuItem *menu_item)
+void gamemenu_sound_volume(BOOL bActivate)
 {
-	return gmenu_slider_get(menu_item, -1600, 0);
-}
-
-void __fastcall gamemenu_sound_volume(int a1)
-{
-	int v1; // ecx
-	int v2; // esi
-
-	if ( a1 )
-	{
-		if ( gbSoundOn )
-		{
-			gbSoundOn = 0;
-			FreeMonsterSnd();
-			v1 = -1600;
+	int volume;
+	if (bActivate) {
+		if (gbSoundOn) {
+			gbSoundOn = FALSE;
+			sound_stop();
+			sound_get_or_set_sound_volume(VOLUME_MIN);
+		} else {
+			gbSoundOn = TRUE;
+			sound_get_or_set_sound_volume(VOLUME_MAX);
 		}
-		else
-		{
-			gbSoundOn = 1;
-			v1 = 0;
-		}
-		sound_get_or_set_sound_volume(v1);
-	}
-	else
-	{
-		v2 = gamemenu_slider_music_sound(&sgOptionMenu[1]);
-		sound_get_or_set_sound_volume(v2);
-		if ( v2 == -1600 )
-		{
-			if ( gbSoundOn )
-			{
-				gbSoundOn = 0;
-				FreeMonsterSnd();
+	} else {
+		volume = gamemenu_slider_music_sound(&sgOptionsMenu[1]);
+		sound_get_or_set_sound_volume(volume);
+		if (volume == VOLUME_MIN) {
+			if (gbSoundOn) {
+				gbSoundOn = FALSE;
+				sound_stop();
 			}
-		}
-		else if ( !gbSoundOn )
-		{
-			gbSoundOn = 1;
+		} else if (!gbSoundOn) {
+			gbSoundOn = TRUE;
 		}
 	}
 	PlaySFX(IS_TITLEMOV);
 	gamemenu_get_sound();
 }
-// 4A22D5: using guessed type char gbSoundOn;
 
-void __fastcall gamemenu_gamma(int a1)
+#ifdef HELLFIRE
+void gamemenu_loadjog(BOOL bActivate)
 {
-	int v1; // eax
-	int v2; // eax
+	if (gbMaxPlayers == 1) {
+		jogging_opt = !jogging_opt;
+		SRegSaveValue(APP_NAME, jogging_title, FALSE, jogging_opt);
+		PlaySFX(IS_TITLEMOV);
+		gamemenu_jogging();
+	}
+}
+#endif
 
-	if ( a1 )
-	{
-		v1 = -(palette_update_gamma(0) != 30);
-		_LOBYTE(v1) = v1 & 0xBA;
-		v2 = v1 + 100;
+void gamemenu_gamma(BOOL bActivate)
+{
+	int gamma;
+	if (bActivate) {
+		gamma = UpdateGamma(0);
+		if (gamma == 30)
+			gamma = 100;
+		else
+			gamma = 30;
+	} else {
+		gamma = gamemenu_slider_gamma();
 	}
-	else
-	{
-		v2 = gamemenu_slider_gamma();
-	}
-	palette_update_gamma(v2);
+
+	UpdateGamma(gamma);
 	gamemenu_get_gamma();
 }
 
-int __cdecl gamemenu_slider_gamma()
+#ifndef HELLFIRE
+void gamemenu_color_cycling(BOOL bActivate)
 {
-	return gmenu_slider_get(&sgOptionMenu[2], 30, 100);
-}
+	BOOL color_cycling;
 
-void __cdecl gamemenu_color_cycling()
-{
-	palette_set_color_cycling(palette_get_colour_cycling() == 0);
-	sgOptionMenu[3].pszStr = color_cycling_toggle_names[palette_get_colour_cycling() & 1];
+	color_cycling = palette_set_color_cycling(palette_get_color_cycling() == 0);
+	sgOptionsMenu[3].pszStr = color_cycling_toggle_names[color_cycling & 1];
 }
+#endif

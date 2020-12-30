@@ -1,791 +1,753 @@
-//HEADER_GOES_HERE
+/**
+ * @file appfat.cpp
+ *
+ * Implementation of error dialogs.
+ */
+#include "all.h"
+#include "../3rdParty/Storm/Source/storm.h"
 
-#include "../types.h"
-
-int appfat_terminated = 0; // weak
+/** Buffer used by GetErrorStr for its return value */
 char sz_error_buf[256];
-int terminating; // weak
-int cleanup_thread_id; // weak
-char empty_string;
+/** Set to true when a fatal error is encountered and the application should shut down. */
+BOOL terminating;
+/** Thread id of the last callee to FreeDlg(). */
+int cleanup_thread_id;
 
-void __cdecl appfat_cpp_init()
+// delete overloads the delete operator.
+void __cdecl operator delete(void *ptr)
 {
-	appfat_terminated = 0x7F800000;
+	if (ptr != NULL) {
+		SMemFree(ptr, "delete", -1, 0);
+	}
 }
 
-struct j_appfat_cpp_init
+#ifdef _DEBUG
+static LONG __stdcall BreakFilter(PEXCEPTION_POINTERS pExc)
 {
-	j_appfat_cpp_init()
-	{
-		appfat_cpp_init();
+	if (pExc->ExceptionRecord == NULL) {
+		return EXCEPTION_CONTINUE_SEARCH;
 	}
-} _j_appfat_cpp_init;
-/*
-bool __cdecl appfat_cpp_free(void *a1)
-{
-	bool result; // al
+	if (pExc->ExceptionRecord->ExceptionCode != EXCEPTION_BREAKPOINT) {
+		return EXCEPTION_CONTINUE_SEARCH;
+	}
 
-	if ( a1 )
-		result = SMemFree(a1, "delete", -1, 0);
-	return result;
+	if (((BYTE *)pExc->ContextRecord->Eip)[0] == 0xCC) { // int 3
+		pExc->ContextRecord->Eip++;
+	}
+
+	return EXCEPTION_CONTINUE_EXECUTION;
 }
-*/
+#endif
 
-char *__fastcall GetErr(int error_code)
+void TriggerBreak()
 {
-	int v1; // edi
-	unsigned int v2; // eax
-	signed int v4; // eax
-	char *i; // ecx
+#ifdef _DEBUG
+	LPTOP_LEVEL_EXCEPTION_FILTER pFilter;
 
-	v1 = error_code;
-	v2 = ((unsigned int)error_code >> 16) & 0x1FFF;
-	if ( v2 == 0x0878 )
-	{
-		GetDSErr(error_code, sz_error_buf, 256);
+	pFilter = SetUnhandledExceptionFilter(BreakFilter);
+#ifdef USE_ASM
+	__asm {
+		int		3
 	}
-	else if ( v2 == 0x0876 )
-	{
-		GetDDErr(error_code, sz_error_buf, 256);
+#else
+	__debugbreak();
+#endif
+	SetUnhandledExceptionFilter(pFilter);
+#endif
+}
+
+/**
+ * @brief Generate a textual message for DirectDraw error codes
+ * @param hError DirectDraw error code
+ * @param pszBuffer Buffer for the error message
+ * @param dwMaxChars Length of pszBuffer
+ */
+static void TraceErrorDD(HRESULT hError, char *pszBuffer, DWORD dwMaxChars)
+{
+	const char *szError;
+
+	switch (hError) {
+	case DD_OK:
+		szError = "DD_OK";
+		break;
+	case DDERR_ALREADYINITIALIZED:
+		szError = "DDERR_ALREADYINITIALIZED";
+		break;
+	case DDERR_BLTFASTCANTCLIP:
+		szError = "DDERR_BLTFASTCANTCLIP";
+		break;
+	case DDERR_CANNOTATTACHSURFACE:
+		szError = "DDERR_CANNOTATTACHSURFACE";
+		break;
+	case DDERR_CANNOTDETACHSURFACE:
+		szError = "DDERR_CANNOTDETACHSURFACE";
+		break;
+	case DDERR_CANTCREATEDC:
+		szError = "DDERR_CANTCREATEDC";
+		break;
+	case DDERR_CANTDUPLICATE:
+		szError = "DDERR_CANTDUPLICATE";
+		break;
+	case DDERR_CLIPPERISUSINGHWND:
+		szError = "DDERR_CLIPPERISUSINGHWND";
+		break;
+	case DDERR_COLORKEYNOTSET:
+		szError = "DDERR_COLORKEYNOTSET";
+		break;
+	case DDERR_CURRENTLYNOTAVAIL:
+		szError = "DDERR_CURRENTLYNOTAVAIL";
+		break;
+	case DDERR_DIRECTDRAWALREADYCREATED:
+		szError = "DDERR_DIRECTDRAWALREADYCREATED";
+		break;
+	case DDERR_EXCEPTION:
+		szError = "DDERR_EXCEPTION";
+		break;
+	case DDERR_EXCLUSIVEMODEALREADYSET:
+		szError = "DDERR_EXCLUSIVEMODEALREADYSET";
+		break;
+	case DDERR_GENERIC:
+		szError = "DDERR_GENERIC";
+		break;
+	case DDERR_HEIGHTALIGN:
+		szError = "DDERR_HEIGHTALIGN";
+		break;
+	case DDERR_HWNDALREADYSET:
+		szError = "DDERR_HWNDALREADYSET";
+		break;
+	case DDERR_HWNDSUBCLASSED:
+		szError = "DDERR_HWNDSUBCLASSED";
+		break;
+	case DDERR_IMPLICITLYCREATED:
+		szError = "DDERR_IMPLICITLYCREATED";
+		break;
+	case DDERR_INCOMPATIBLEPRIMARY:
+		szError = "DDERR_INCOMPATIBLEPRIMARY";
+		break;
+	case DDERR_INVALIDCAPS:
+		szError = "DDERR_INVALIDCAPS";
+		break;
+	case DDERR_INVALIDCLIPLIST:
+		szError = "DDERR_INVALIDCLIPLIST";
+		break;
+	case DDERR_INVALIDDIRECTDRAWGUID:
+		szError = "DDERR_INVALIDDIRECTDRAWGUID";
+		break;
+	case DDERR_INVALIDMODE:
+		szError = "DDERR_INVALIDMODE";
+		break;
+	case DDERR_INVALIDOBJECT:
+		szError = "DDERR_INVALIDOBJECT";
+		break;
+	case DDERR_INVALIDPARAMS:
+		szError = "DDERR_INVALIDPARAMS";
+		break;
+	case DDERR_INVALIDPIXELFORMAT:
+		szError = "DDERR_INVALIDPIXELFORMAT";
+		break;
+	case DDERR_INVALIDPOSITION:
+		szError = "DDERR_INVALIDPOSITION";
+		break;
+	case DDERR_INVALIDRECT:
+		szError = "DDERR_INVALIDRECT";
+		break;
+	case DDERR_LOCKEDSURFACES:
+		szError = "DDERR_LOCKEDSURFACES";
+		break;
+	case DDERR_NO3D:
+		szError = "DDERR_NO3D";
+		break;
+	case DDERR_NOALPHAHW:
+		szError = "DDERR_NOALPHAHW";
+		break;
+	case DDERR_NOBLTHW:
+		szError = "DDERR_NOBLTHW";
+		break;
+	case DDERR_NOCLIPLIST:
+		szError = "DDERR_NOCLIPLIST";
+		break;
+	case DDERR_NOCLIPPERATTACHED:
+		szError = "DDERR_NOCLIPPERATTACHED";
+		break;
+	case DDERR_NOCOLORCONVHW:
+		szError = "DDERR_NOCOLORCONVHW";
+		break;
+	case DDERR_NOCOLORKEY:
+		szError = "DDERR_NOCOLORKEY";
+		break;
+	case DDERR_NOCOLORKEYHW:
+		szError = "DDERR_NOCOLORKEYHW";
+		break;
+	case DDERR_NOCOOPERATIVELEVELSET:
+		szError = "DDERR_NOCOOPERATIVELEVELSET";
+		break;
+	case DDERR_NODC:
+		szError = "DDERR_NODC";
+		break;
+	case DDERR_NODDROPSHW:
+		szError = "DDERR_NODDROPSHW";
+		break;
+	case DDERR_NODIRECTDRAWHW:
+		szError = "DDERR_NODIRECTDRAWHW";
+		break;
+	case DDERR_NOEMULATION:
+		szError = "DDERR_NOEMULATION";
+		break;
+	case DDERR_NOEXCLUSIVEMODE:
+		szError = "DDERR_NOEXCLUSIVEMODE";
+		break;
+	case DDERR_NOFLIPHW:
+		szError = "DDERR_NOFLIPHW";
+		break;
+	case DDERR_NOGDI:
+		szError = "DDERR_NOGDI";
+		break;
+	case DDERR_NOHWND:
+		szError = "DDERR_NOHWND";
+		break;
+	case DDERR_NOMIRRORHW:
+		szError = "DDERR_NOMIRRORHW";
+		break;
+	case DDERR_NOOVERLAYDEST:
+		szError = "DDERR_NOOVERLAYDEST";
+		break;
+	case DDERR_NOOVERLAYHW:
+		szError = "DDERR_NOOVERLAYHW";
+		break;
+	case DDERR_NOPALETTEATTACHED:
+		szError = "DDERR_NOPALETTEATTACHED";
+		break;
+	case DDERR_NOPALETTEHW:
+		szError = "DDERR_NOPALETTEHW";
+		break;
+	case DDERR_NORASTEROPHW:
+		szError = "DDERR_NORASTEROPHW";
+		break;
+	case DDERR_NOROTATIONHW:
+		szError = "DDERR_NOROTATIONHW";
+		break;
+	case DDERR_NOSTRETCHHW:
+		szError = "DDERR_NOSTRETCHHW";
+		break;
+	case DDERR_NOT4BITCOLOR:
+		szError = "DDERR_NOT4BITCOLOR";
+		break;
+	case DDERR_NOT4BITCOLORINDEX:
+		szError = "DDERR_NOT4BITCOLORINDEX";
+		break;
+	case DDERR_NOT8BITCOLOR:
+		szError = "DDERR_NOT8BITCOLOR";
+		break;
+	case DDERR_NOTAOVERLAYSURFACE:
+		szError = "DDERR_NOTAOVERLAYSURFACE";
+		break;
+	case DDERR_NOTEXTUREHW:
+		szError = "DDERR_NOTEXTUREHW";
+		break;
+	case DDERR_NOTFLIPPABLE:
+		szError = "DDERR_NOTFLIPPABLE";
+		break;
+	case DDERR_NOTFOUND:
+		szError = "DDERR_NOTFOUND";
+		break;
+	case DDERR_NOTLOCKED:
+		szError = "DDERR_NOTLOCKED";
+		break;
+	case DDERR_NOTPALETTIZED:
+		szError = "DDERR_NOTPALETTIZED";
+		break;
+	case DDERR_NOVSYNCHW:
+		szError = "DDERR_NOVSYNCHW";
+		break;
+	case DDERR_NOZBUFFERHW:
+		szError = "DDERR_NOZBUFFERHW";
+		break;
+	case DDERR_NOZOVERLAYHW:
+		szError = "DDERR_NOZOVERLAYHW";
+		break;
+	case DDERR_OUTOFCAPS:
+		szError = "DDERR_OUTOFCAPS";
+		break;
+	case DDERR_OUTOFMEMORY:
+		szError = "DDERR_OUTOFMEMORY";
+		break;
+	case DDERR_OUTOFVIDEOMEMORY:
+		szError = "DDERR_OUTOFVIDEOMEMORY";
+		break;
+	case DDERR_OVERLAYCANTCLIP:
+		szError = "DDERR_OVERLAYCANTCLIP";
+		break;
+	case DDERR_OVERLAYCOLORKEYONLYONEACTIVE:
+		szError = "DDERR_OVERLAYCOLORKEYONLYONEACTIVE";
+		break;
+	case DDERR_OVERLAYNOTVISIBLE:
+		szError = "DDERR_OVERLAYNOTVISIBLE";
+		break;
+	case DDERR_PALETTEBUSY:
+		szError = "DDERR_PALETTEBUSY";
+		break;
+	case DDERR_PRIMARYSURFACEALREADYEXISTS:
+		szError = "DDERR_PRIMARYSURFACEALREADYEXISTS";
+		break;
+	case DDERR_REGIONTOOSMALL:
+		szError = "DDERR_REGIONTOOSMALL";
+		break;
+	case DDERR_SURFACEALREADYATTACHED:
+		szError = "DDERR_SURFACEALREADYATTACHED";
+		break;
+	case DDERR_SURFACEALREADYDEPENDENT:
+		szError = "DDERR_SURFACEALREADYDEPENDENT";
+		break;
+	case DDERR_SURFACEBUSY:
+		szError = "DDERR_SURFACEBUSY";
+		break;
+	case DDERR_SURFACEISOBSCURED:
+		szError = "DDERR_SURFACEISOBSCURED";
+		break;
+	case DDERR_SURFACELOST:
+		szError = "DDERR_SURFACELOST";
+		break;
+	case DDERR_SURFACENOTATTACHED:
+		szError = "DDERR_SURFACENOTATTACHED";
+		break;
+	case DDERR_TOOBIGHEIGHT:
+		szError = "DDERR_TOOBIGHEIGHT";
+		break;
+	case DDERR_TOOBIGSIZE:
+		szError = "DDERR_TOOBIGSIZE";
+		break;
+	case DDERR_TOOBIGWIDTH:
+		szError = "DDERR_TOOBIGWIDTH";
+		break;
+	case DDERR_UNSUPPORTED:
+		szError = "DDERR_UNSUPPORTED";
+		break;
+	case DDERR_UNSUPPORTEDFORMAT:
+		szError = "DDERR_UNSUPPORTEDFORMAT";
+		break;
+	case DDERR_UNSUPPORTEDMASK:
+		szError = "DDERR_UNSUPPORTEDMASK";
+		break;
+	case DDERR_VERTICALBLANKINPROGRESS:
+		szError = "DDERR_VERTICALBLANKINPROGRESS";
+		break;
+	case DDERR_WASSTILLDRAWING:
+		szError = "DDERR_WASSTILLDRAWING";
+		break;
+	case DDERR_WRONGMODE:
+		szError = "DDERR_WRONGMODE";
+		break;
+	case DDERR_XALIGN:
+		szError = "DDERR_XALIGN";
+		break;
+	case DDERR_CANTLOCKSURFACE:
+		szError = "DDERR_CANTLOCKSURFACE";
+		break;
+	case DDERR_CANTPAGELOCK:
+		szError = "DDERR_CANTPAGELOCK";
+		break;
+	case DDERR_CANTPAGEUNLOCK:
+		szError = "DDERR_CANTPAGEUNLOCK";
+		break;
+	case DDERR_DCALREADYCREATED:
+		szError = "DDERR_DCALREADYCREATED";
+		break;
+	case DDERR_INVALIDSURFACETYPE:
+		szError = "DDERR_INVALIDSURFACETYPE";
+		break;
+	case DDERR_NOMIPMAPHW:
+		szError = "DDERR_NOMIPMAPHW";
+		break;
+	case DDERR_NOTPAGELOCKED:
+		szError = "DDERR_NOTPAGELOCKED";
+		break;
+	default: {
+		const char szUnknown[] = "DDERR unknown 0x%x";
+		assert(dwMaxChars >= sizeof(szUnknown) + 10);
+		sprintf(pszBuffer, szUnknown, hError);
+		return;
 	}
-	else
-	{
-		if ( !SErrGetErrorStr(error_code, sz_error_buf, 256) && !FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, v1, 0x400u, sz_error_buf, 0x100u, NULL) )
-			wsprintfA(sz_error_buf, "unknown error 0x%08x", v1);
 	}
-	v4 = strlen(sz_error_buf);
-	for ( i = &sz_error_buf[v4-1]; v4 > 0; *i = 0 )
-	{
-		--v4;
-		if ( *--i != '\r' && *i != '\n' )
+
+	strncpy(pszBuffer, szError, dwMaxChars);
+}
+
+/**
+ * @brief Generate a textual message for DirectSound error codes
+ * @param hError DirectSound error code
+ * @param pszBuffer Buffer for the error message
+ * @param dwMaxChars Length of pszBuffer
+ */
+static void TraceErrorDS(HRESULT hError, char *pszBuffer, DWORD dwMaxChars)
+{
+	const char *szError;
+
+	switch (hError) {
+	case DSERR_PRIOLEVELNEEDED:
+		szError = "DSERR_PRIOLEVELNEEDED";
+		break;
+	case DSERR_BADFORMAT:
+		szError = "DSERR_BADFORMAT";
+		break;
+	case DSERR_NODRIVER:
+		szError = "DSERR_NODRIVER";
+		break;
+	case DSERR_ALREADYINITIALIZED:
+		szError = "DSERR_ALREADYINITIALIZED";
+		break;
+	case DSERR_BUFFERLOST:
+		szError = "DSERR_BUFFERLOST";
+		break;
+	case DS_OK:
+		szError = "DS_OK";
+		break;
+	case DSERR_INVALIDCALL:
+		szError = "DSERR_INVALIDCALL";
+		break;
+	case E_NOINTERFACE:
+		szError = "E_NOINTERFACE";
+		break;
+	case DSERR_NOAGGREGATION:
+		szError = "DSERR_NOAGGREGATION";
+		break;
+	case DSERR_OUTOFMEMORY:
+		szError = "DSERR_OUTOFMEMORY";
+		break;
+	case DSERR_INVALIDPARAM:
+		szError = "DSERR_INVALIDPARAM";
+		break;
+	case DSERR_ALLOCATED:
+		szError = "DSERR_ALLOCATED";
+		break;
+	case DSERR_CONTROLUNAVAIL:
+		szError = "DSERR_CONTROLUNAVAIL";
+		break;
+	default: {
+		const char szUnknown[] = "DSERR unknown 0x%x";
+		assert(dwMaxChars >= sizeof(szUnknown) + 10);
+		sprintf(pszBuffer, szUnknown, hError);
+		return;
+	}
+	}
+
+	strncpy(pszBuffer, szError, dwMaxChars);
+}
+
+/**
+ * @brief Returns a formatted error message based on the given error code.
+ * @param error_code DirectX error code
+ */
+const char *GetErrorStr(DWORD error_code)
+{
+	int size;
+	char *chr;
+
+	if (HRESULT_FACILITY(error_code) == _FACDS) {
+		TraceErrorDS(error_code, sz_error_buf, sizeof(sz_error_buf) / sizeof(sz_error_buf[0]));
+	} else if (HRESULT_FACILITY(error_code) == _FACDD) {
+		TraceErrorDD(error_code, sz_error_buf, sizeof(sz_error_buf) / sizeof(sz_error_buf[0]));
+	} else if (!SErrGetErrorStr(error_code, sz_error_buf, sizeof(sz_error_buf) / sizeof(sz_error_buf[0]))
+	    && !FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, error_code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), sz_error_buf, sizeof(sz_error_buf) / sizeof(sz_error_buf[0]), NULL)) {
+		wsprintf(sz_error_buf, "unknown error 0x%08x", error_code);
+	}
+
+	size = strlen(sz_error_buf);
+
+	chr = &sz_error_buf[size - 1];
+	while (size-- > 0) {
+		chr--;
+
+		if (*chr != '\r' && *chr != '\n')
 			break;
+
+		*chr = 0x00;
 	}
+
 	return sz_error_buf;
 }
 
-void __fastcall GetDDErr(int error_code, char *error_buf, int error_buf_len)
+/**
+ * @brief Returns a formatted error message of the last error.
+ */
+const char *TraceLastError()
 {
-	const char *v3; // eax
-	char v4[4]; // [esp+0h] [ebp-14h]
-
-	if ( error_code > DDERR_SURFACEBUSY )
-	{
-		if ( error_code > DDERR_NOPALETTEHW )
-		{
-			if ( error_code > DDERR_CANTPAGELOCK )
-			{
-				switch ( error_code )
-				{
-					case DDERR_CANTPAGEUNLOCK:
-						v3 = "DDERR_CANTPAGEUNLOCK";
-						goto LABEL_182;
-					case DDERR_NOTPAGELOCKED:
-						v3 = "DDERR_NOTPAGELOCKED";
-						goto LABEL_182;
-					case DD_OK:
-						v3 = "DD_OK";
-						goto LABEL_182;
-				}
-			}
-			else
-			{
-				if ( error_code == DDERR_CANTPAGELOCK )
-				{
-					v3 = "DDERR_CANTPAGELOCK";
-					goto LABEL_182;
-				}
-				switch ( error_code )
-				{
-					case DDERR_BLTFASTCANTCLIP:
-						v3 = "DDERR_BLTFASTCANTCLIP";
-						goto LABEL_182;
-					case DDERR_NOBLTHW:
-						v3 = "DDERR_NOBLTHW";
-						goto LABEL_182;
-					case DDERR_NODDROPSHW:
-						v3 = "DDERR_NODDROPSHW";
-						goto LABEL_182;
-					case DDERR_OVERLAYNOTVISIBLE:
-						v3 = "DDERR_OVERLAYNOTVISIBLE";
-						goto LABEL_182;
-					case DDERR_NOOVERLAYDEST:
-						v3 = "DDERR_NOOVERLAYDEST";
-						goto LABEL_182;
-					case DDERR_INVALIDPOSITION:
-						v3 = "DDERR_INVALIDPOSITION";
-						goto LABEL_182;
-					case DDERR_NOTAOVERLAYSURFACE:
-						v3 = "DDERR_NOTAOVERLAYSURFACE";
-						goto LABEL_182;
-					case DDERR_EXCLUSIVEMODEALREADYSET:
-						v3 = "DDERR_EXCLUSIVEMODEALREADYSET";
-						goto LABEL_182;
-					case DDERR_NOTFLIPPABLE:
-						v3 = "DDERR_NOTFLIPPABLE";
-						goto LABEL_182;
-					case DDERR_CANTDUPLICATE:
-						v3 = "DDERR_CANTDUPLICATE";
-						goto LABEL_182;
-					case DDERR_NOTLOCKED:
-						v3 = "DDERR_NOTLOCKED";
-						goto LABEL_182;
-					case DDERR_CANTCREATEDC:
-						v3 = "DDERR_CANTCREATEDC";
-						goto LABEL_182;
-					case DDERR_NODC:
-						v3 = "DDERR_NODC";
-						goto LABEL_182;
-					case DDERR_WRONGMODE:
-						v3 = "DDERR_WRONGMODE";
-						goto LABEL_182;
-					case DDERR_IMPLICITLYCREATED:
-						v3 = "DDERR_IMPLICITLYCREATED";
-						goto LABEL_182;
-					case DDERR_NOTPALETTIZED:
-						v3 = "DDERR_NOTPALETTIZED";
-						goto LABEL_182;
-					case DDERR_NOMIPMAPHW:
-						v3 = "DDERR_NOMIPMAPHW";
-						goto LABEL_182;
-					case DDERR_INVALIDSURFACETYPE:
-						v3 = "DDERR_INVALIDSURFACETYPE";
-						goto LABEL_182;
-					case DDERR_DCALREADYCREATED:
-						v3 = "DDERR_DCALREADYCREATED";
-						goto LABEL_182;
-					default:
-						goto LABEL_178;
-				}
-			}
-		}
-		else
-		{
-			if ( error_code == DDERR_NOPALETTEHW )
-			{
-				v3 = "DDERR_NOPALETTEHW";
-				goto LABEL_182;
-			}
-			if ( error_code > DDERR_INVALIDDIRECTDRAWGUID )
-			{
-				switch ( error_code )
-				{
-					case DDERR_DIRECTDRAWALREADYCREATED:
-						v3 = "DDERR_DIRECTDRAWALREADYCREATED";
-						goto LABEL_182;
-					case DDERR_NODIRECTDRAWHW:
-						v3 = "DDERR_NODIRECTDRAWHW";
-						goto LABEL_182;
-					case DDERR_PRIMARYSURFACEALREADYEXISTS:
-						v3 = "DDERR_PRIMARYSURFACEALREADYEXISTS";
-						goto LABEL_182;
-					case DDERR_NOEMULATION:
-						v3 = "DDERR_NOEMULATION";
-						goto LABEL_182;
-					case DDERR_REGIONTOOSMALL:
-						v3 = "DDERR_REGIONTOOSMALL";
-						goto LABEL_182;
-					case DDERR_CLIPPERISUSINGHWND:
-						v3 = "DDERR_CLIPPERISUSINGHWND";
-						goto LABEL_182;
-					case DDERR_NOCLIPPERATTACHED:
-						v3 = "DDERR_NOCLIPPERATTACHED";
-						goto LABEL_182;
-					case DDERR_NOHWND:
-						v3 = "DDERR_NOHWND";
-						goto LABEL_182;
-					case DDERR_HWNDSUBCLASSED:
-						v3 = "DDERR_HWNDSUBCLASSED";
-						goto LABEL_182;
-					case DDERR_HWNDALREADYSET:
-						v3 = "DDERR_HWNDALREADYSET";
-						goto LABEL_182;
-					case DDERR_NOPALETTEATTACHED:
-						v3 = "DDERR_NOPALETTEATTACHED";
-						goto LABEL_182;
-					default:
-						goto LABEL_178;
-				}
-			}
-			else
-			{
-				if ( error_code == DDERR_INVALIDDIRECTDRAWGUID )
-				{
-					v3 = "DDERR_INVALIDDIRECTDRAWGUID";
-					goto LABEL_182;
-				}
-				if ( error_code > DDERR_TOOBIGWIDTH )
-				{
-					switch ( error_code )
-					{
-						case DDERR_UNSUPPORTEDFORMAT:
-							v3 = "DDERR_UNSUPPORTEDFORMAT";
-							goto LABEL_182;
-						case DDERR_UNSUPPORTEDMASK:
-							v3 = "DDERR_UNSUPPORTEDMASK";
-							goto LABEL_182;
-						case DDERR_VERTICALBLANKINPROGRESS:
-							v3 = "DDERR_VERTICALBLANKINPROGRESS";
-							goto LABEL_182;
-						case DDERR_WASSTILLDRAWING:
-							v3 = "DDERR_WASSTILLDRAWING";
-							goto LABEL_182;
-						case DDERR_XALIGN:
-							v3 = "DDERR_XALIGN";
-							goto LABEL_182;
-					}
-				}
-				else
-				{
-					switch ( error_code )
-					{
-						case DDERR_TOOBIGWIDTH:
-							v3 = "DDERR_TOOBIGWIDTH";
-							goto LABEL_182;
-						case DDERR_CANTLOCKSURFACE:
-							v3 = "DDERR_CANTLOCKSURFACE";
-							goto LABEL_182;
-						case DDERR_SURFACEISOBSCURED:
-							v3 = "DDERR_SURFACEISOBSCURED";
-							goto LABEL_182;
-						case DDERR_SURFACELOST:
-							v3 = "DDERR_SURFACELOST";
-							goto LABEL_182;
-						case DDERR_SURFACENOTATTACHED:
-							v3 = "DDERR_SURFACENOTATTACHED";
-							goto LABEL_182;
-						case DDERR_TOOBIGHEIGHT:
-							v3 = "DDERR_TOOBIGHEIGHT";
-							goto LABEL_182;
-						case DDERR_TOOBIGSIZE:
-							v3 = "DDERR_TOOBIGSIZE";
-							goto LABEL_182;
-					}
-				}
-			}
-		}
-		goto LABEL_178;
-	}
-	if ( error_code == DDERR_SURFACEBUSY )
-	{
-		v3 = "DDERR_SURFACEBUSY";
-		goto LABEL_182;
-	}
-	if ( error_code > DDERR_NOCOLORKEYHW )
-	{
-		if ( error_code > DDERR_NOTEXTUREHW )
-		{
-			if ( error_code > DDERR_OVERLAYCANTCLIP )
-			{
-				switch ( error_code )
-				{
-					case DDERR_OVERLAYCOLORKEYONLYONEACTIVE:
-						v3 = "DDERR_OVERLAYCOLORKEYONLYONEACTIVE";
-						goto LABEL_182;
-					case DDERR_PALETTEBUSY:
-						v3 = "DDERR_PALETTEBUSY";
-						goto LABEL_182;
-					case DDERR_COLORKEYNOTSET:
-						v3 = "DDERR_COLORKEYNOTSET";
-						goto LABEL_182;
-					case DDERR_SURFACEALREADYATTACHED:
-						v3 = "DDERR_SURFACEALREADYATTACHED";
-						goto LABEL_182;
-					case DDERR_SURFACEALREADYDEPENDENT:
-						v3 = "DDERR_SURFACEALREADYDEPENDENT";
-						goto LABEL_182;
-				}
-			}
-			else
-			{
-				switch ( error_code )
-				{
-					case DDERR_OVERLAYCANTCLIP:
-						v3 = "DDERR_OVERLAYCANTCLIP";
-						goto LABEL_182;
-					case DDERR_NOVSYNCHW:
-						v3 = "DDERR_NOVSYNCHW";
-						goto LABEL_182;
-					case DDERR_NOZBUFFERHW:
-						v3 = "DDERR_NOZBUFFERHW";
-						goto LABEL_182;
-					case DDERR_NOZOVERLAYHW:
-						v3 = "DDERR_NOZOVERLAYHW";
-						goto LABEL_182;
-					case DDERR_OUTOFCAPS:
-						v3 = "DDERR_OUTOFCAPS";
-						goto LABEL_182;
-					case DDERR_OUTOFVIDEOMEMORY:
-						v3 = "DDERR_OUTOFVIDEOMEMORY";
-						goto LABEL_182;
-				}
-			}
-		}
-		else
-		{
-			if ( error_code == DDERR_NOTEXTUREHW )
-			{
-				v3 = "DDERR_NOTEXTUREHW";
-				goto LABEL_182;
-			}
-			if ( error_code > DDERR_NORASTEROPHW )
-			{
-				switch ( error_code )
-				{
-					case DDERR_NOROTATIONHW:
-						v3 = "DDERR_NOROTATIONHW";
-						goto LABEL_182;
-					case DDERR_NOSTRETCHHW:
-						v3 = "DDERR_NOSTRETCHHW";
-						goto LABEL_182;
-					case DDERR_NOT4BITCOLOR:
-						v3 = "DDERR_NOT4BITCOLOR";
-						goto LABEL_182;
-					case DDERR_NOT4BITCOLORINDEX:
-						v3 = "DDERR_NOT4BITCOLORINDEX";
-						goto LABEL_182;
-					case DDERR_NOT8BITCOLOR:
-						v3 = "DDERR_NOT8BITCOLOR";
-						goto LABEL_182;
-				}
-			}
-			else
-			{
-				switch ( error_code )
-				{
-					case DDERR_NORASTEROPHW:
-						v3 = "DDERR_NORASTEROPHW";
-						goto LABEL_182;
-					case DDERR_NOEXCLUSIVEMODE:
-						v3 = "DDERR_NOEXCLUSIVEMODE";
-						goto LABEL_182;
-					case DDERR_NOFLIPHW:
-						v3 = "DDERR_NOFLIPHW";
-						goto LABEL_182;
-					case DDERR_NOGDI:
-						v3 = "DDERR_NOGDI";
-						goto LABEL_182;
-					case DDERR_NOMIRRORHW:
-						v3 = "DDERR_NOMIRRORHW";
-						goto LABEL_182;
-					case DDERR_NOTFOUND:
-						v3 = "DDERR_NOTFOUND";
-						goto LABEL_182;
-					case DDERR_NOOVERLAYHW:
-						v3 = "DDERR_NOOVERLAYHW";
-						goto LABEL_182;
-				}
-			}
-		}
-		goto LABEL_178;
-	}
-	if ( error_code == DDERR_NOCOLORKEYHW )
-	{
-		v3 = "DDERR_NOCOLORKEYHW";
-		goto LABEL_182;
-	}
-	if ( error_code > DDERR_INVALIDCLIPLIST )
-	{
-		if ( error_code > DDERR_NO3D )
-		{
-			switch ( error_code )
-			{
-				case DDERR_NOALPHAHW:
-					v3 = "DDERR_NOALPHAHW";
-					goto LABEL_182;
-				case DDERR_NOCLIPLIST:
-					v3 = "DDERR_NOCLIPLIST";
-					goto LABEL_182;
-				case DDERR_NOCOLORCONVHW:
-					v3 = "DDERR_NOCOLORCONVHW";
-					goto LABEL_182;
-				case DDERR_NOCOOPERATIVELEVELSET:
-					v3 = "DDERR_NOCOOPERATIVELEVELSET";
-					goto LABEL_182;
-				case DDERR_NOCOLORKEY:
-					v3 = "DDERR_NOCOLORKEY";
-					goto LABEL_182;
-			}
-		}
-		else
-		{
-			switch ( error_code )
-			{
-				case DDERR_NO3D:
-					v3 = "DDERR_NO3D";
-					goto LABEL_182;
-				case DDERR_INVALIDMODE:
-					v3 = "DDERR_INVALIDMODE";
-					goto LABEL_182;
-				case DDERR_INVALIDOBJECT:
-					v3 = "DDERR_INVALIDOBJECT";
-					goto LABEL_182;
-				case DDERR_INVALIDPIXELFORMAT:
-					v3 = "DDERR_INVALIDPIXELFORMAT";
-					goto LABEL_182;
-				case DDERR_INVALIDRECT:
-					v3 = "DDERR_INVALIDRECT";
-					goto LABEL_182;
-				case DDERR_LOCKEDSURFACES:
-					v3 = "DDERR_LOCKEDSURFACES";
-					goto LABEL_182;
-			}
-		}
-		goto LABEL_178;
-	}
-	if ( error_code == DDERR_INVALIDCLIPLIST )
-	{
-		v3 = "DDERR_INVALIDCLIPLIST";
-		goto LABEL_182;
-	}
-	if ( error_code > DDERR_CANNOTDETACHSURFACE )
-	{
-		switch ( error_code )
-		{
-			case DDERR_CURRENTLYNOTAVAIL:
-				v3 = "DDERR_CURRENTLYNOTAVAIL";
-				goto LABEL_182;
-			case DDERR_EXCEPTION:
-				v3 = "DDERR_EXCEPTION";
-				goto LABEL_182;
-			case DDERR_HEIGHTALIGN:
-				v3 = "DDERR_HEIGHTALIGN";
-				goto LABEL_182;
-			case DDERR_INCOMPATIBLEPRIMARY:
-				v3 = "DDERR_INCOMPATIBLEPRIMARY";
-				goto LABEL_182;
-			case DDERR_INVALIDCAPS:
-				v3 = "DDERR_INVALIDCAPS";
-				goto LABEL_182;
-		}
-		goto LABEL_178;
-	}
-	switch ( error_code )
-	{
-		case DDERR_CANNOTDETACHSURFACE:
-			v3 = "DDERR_CANNOTDETACHSURFACE";
-			goto LABEL_182;
-		case DDERR_UNSUPPORTED:
-			v3 = "DDERR_UNSUPPORTED";
-			goto LABEL_182;
-		case DDERR_GENERIC:
-			v3 = "DDERR_GENERIC";
-			goto LABEL_182;
-		case DDERR_OUTOFMEMORY:
-			v3 = "DDERR_OUTOFMEMORY";
-			goto LABEL_182;
-		case DDERR_INVALIDPARAMS:
-			v3 = "DDERR_INVALIDPARAMS";
-			goto LABEL_182;
-		case DDERR_ALREADYINITIALIZED:
-			v3 = "DDERR_ALREADYINITIALIZED";
-			goto LABEL_182;
-	}
-	if ( error_code != DDERR_CANNOTATTACHSURFACE )
-	{
-LABEL_178:
-		strcpy(v4, "DDERR unknown 0x%x");
-		sprintf(error_buf, v4, error_code);
-		return;
-	}
-	v3 = "DDERR_CANNOTATTACHSURFACE";
-LABEL_182:
-	strncpy(error_buf, v3, error_buf_len);
+	return GetErrorStr(GetLastError());
 }
 
-void __fastcall GetDSErr(int error_code, char *error_buf, int error_buf_len)
+/**
+ * @brief Displays an error message box based on the given format string and variable argument list.
+ * @param pszFmt Error message format
+ * @param va Additional parameters for message format
+ */
+static void MsgBox(const char *pszFmt, va_list va)
 {
-	const char *v3; // eax
-	char v4[4]; // [esp+0h] [ebp-14h]
+	char Text[256];
 
-	if ( error_code > DSERR_INVALIDCALL )
-	{
-		switch ( error_code )
-		{
-			case DSERR_PRIOLEVELNEEDED:
-				v3 = "DSERR_PRIOLEVELNEEDED";
-				goto LABEL_29;
-			case DSERR_BADFORMAT:
-				v3 = "DSERR_BADFORMAT";
-				goto LABEL_29;
-			case DSERR_NODRIVER:
-				v3 = "DSERR_NODRIVER";
-				goto LABEL_29;
-			case DSERR_ALREADYINITIALIZED:
-				v3 = "DSERR_ALREADYINITIALIZED";
-				goto LABEL_29;
-			case DSERR_BUFFERLOST:
-				v3 = "DSERR_BUFFERLOST";
-				goto LABEL_29;
-			case DS_OK:
-				v3 = "DS_OK";
-				goto LABEL_29;
-		}
-		goto LABEL_22;
-	}
-	switch ( error_code )
-	{
-		case DSERR_INVALIDCALL:
-			v3 = "DSERR_INVALIDCALL";
-			goto LABEL_29;
-		case E_NOINTERFACE:
-			v3 = "E_NOINTERFACE";
-			goto LABEL_29;
-		case DSERR_NOAGGREGATION:
-			v3 = "DSERR_NOAGGREGATION";
-			goto LABEL_29;
-		case DSERR_OUTOFMEMORY:
-			v3 = "DSERR_OUTOFMEMORY";
-			goto LABEL_29;
-		case DSERR_INVALIDPARAM:
-			v3 = "DSERR_INVALIDPARAM";
-			goto LABEL_29;
-		case DSERR_ALLOCATED:
-			v3 = "DSERR_ALLOCATED";
-			goto LABEL_29;
-	}
-	if ( error_code != DSERR_CONTROLUNAVAIL )
-	{
-LABEL_22:
-		strcpy(v4, "DSERR unknown 0x%x");
-		sprintf(error_buf, v4, error_code);
-		return;
-	}
-	v3 = "DSERR_CONTROLUNAVAIL";
-LABEL_29:
-	strncpy(error_buf, v3, error_buf_len);
+	wvsprintf(Text, pszFmt, va);
+	if (ghMainWnd)
+		SetWindowPos(ghMainWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
+	MessageBox(ghMainWnd, Text, "ERROR", MB_TASKMODAL | MB_ICONHAND);
 }
 
-char *__cdecl GetLastErr()
+/**
+ * @brief Cleans up after a fatal application error.
+ */
+static void FreeDlg()
 {
-	int v0; // eax
+	if (terminating && cleanup_thread_id != GetCurrentThreadId())
+		Sleep(20000);
 
-	v0 = GetLastError();
-	return GetErr(v0);
-}
-
-void TermMsg(char *pszFmt, ...)
-{
-	va_list arglist; // [esp+8h] [ebp+8h]
-
-	va_start(arglist, pszFmt);
-	FreeDlg();
-	if ( pszFmt )
-		MsgBox(pszFmt, arglist);
-	init_cleanup(0);
-	exit(1);
-}
-
-void __fastcall MsgBox(char *pszFmt, va_list va)
-{
-	char Text[256]; // [esp+0h] [ebp-100h]
-
-	wvsprintfA(Text, pszFmt, va);
-	if ( ghMainWnd )
-		SetWindowPos(ghMainWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE|SWP_NOMOVE|SWP_NOSIZE);
-	MessageBoxA(ghMainWnd, Text, "ERROR", MB_TASKMODAL|MB_ICONHAND);
-}
-
-void __cdecl FreeDlg()
-{
-	if ( terminating && cleanup_thread_id != GetCurrentThreadId() )
-		Sleep(20000u);
-	terminating = 1;
+	terminating = TRUE;
 	cleanup_thread_id = GetCurrentThreadId();
-	dx_cleanup();
-	if ( (unsigned char)gbMaxPlayers > 1u )
-	{
-		if ( SNetLeaveGame(3) )
-			Sleep(2000u);
-	}
-	SNetDestroy();
-	ShowCursor(1);
-}
-// 4B7A34: using guessed type int terminating;
-// 4B7A38: using guessed type int cleanup_thread_id;
-// 679660: using guessed type char gbMaxPlayers;
 
-void DrawDlg(char *pszFmt, ...)
+	dx_cleanup();
+
+	if (gbMaxPlayers > 1) {
+		if (SNetLeaveGame(3))
+			Sleep(2000);
+	}
+
+	SNetDestroy();
+	ShowCursor(TRUE);
+}
+
+/**
+ * @brief Terminates the game and displays an error message box.
+ * @param pszFmt Optional error message.
+ * @param ... (see printf)
+ */
+#ifdef HELLFIRE
+__declspec(naked)
+#endif
+    void __cdecl app_fatal(const char *pszFmt, ...)
 {
-	char text[256]; // [esp+0h] [ebp-100h]
-	va_list arglist; // [esp+10Ch] [ebp+Ch]
+	va_list va;
+
+	va_start(va, pszFmt);
+	FreeDlg();
+#if defined(_DEBUG) || defined(HELLFIRE)
+	TriggerBreak();
+#endif
+
+	if (pszFmt)
+		MsgBox(pszFmt, va);
+
+	va_end(va);
+
+	init_cleanup(FALSE);
+	exit(1);
+	ExitProcess(1);
+}
+
+/**
+ * @brief Displays a warning message box based on the given formatted error message.
+ * @param pszFmt Error message format
+ * @param ... Additional parameters for message format
+ */
+void __cdecl DrawDlg(const char *pszFmt, ...)
+{
+	char text[256];
+	va_list arglist;
 
 	va_start(arglist, pszFmt);
-	wvsprintfA(text, pszFmt, arglist);
-	SDrawMessageBox(text, "Diablo", MB_TASKMODAL|MB_ICONEXCLAMATION);
+	wvsprintf(text, pszFmt, arglist);
+	va_end(arglist);
+	SDrawMessageBox(text, APP_NAME, MB_TASKMODAL | MB_ICONEXCLAMATION);
 }
 
-void __fastcall DDErrDlg(int error_code, int log_line_nr, char *log_file_path)
+#ifdef _DEBUG
+/**
+ * @brief Show an error and exit the application.
+ * @param nLineNo The line number of the assertion
+ * @param pszFile File name where the assertion is located
+ * @param pszFail Fail message
+ */
+void assert_fail(int nLineNo, const char *pszFile, const char *pszFail)
 {
-	int v3; // esi
-	char *v4; // eax
+	app_fatal("assertion failed (%d:%s)\n%s", nLineNo, pszFile, pszFail);
+}
+#endif
 
-	v3 = log_line_nr;
-	if ( error_code )
-	{
-		v4 = GetErr(error_code);
-		TermMsg("Direct draw error (%s:%d)\n%s", log_file_path, v3, v4);
+/**
+ * @brief Terminates the game with a DirectDraw assertion message box.
+ */
+void DDErrMsg(DWORD error_code, int log_line_nr, const char *log_file_path)
+{
+	const char *msg;
+
+	if (error_code) {
+		msg = GetErrorStr(error_code);
+		app_fatal("Direct draw error (%s:%d)\n%s", log_file_path, log_line_nr, msg);
 	}
 }
 
-void __fastcall DSErrDlg(int error_code, int log_line_nr, char *log_file_path)
+/**
+ * @brief Terminates the game with a DirectSound assertion message box.
+ */
+void DSErrMsg(DWORD error_code, int log_line_nr, const char *log_file_path)
 {
-	int v3; // esi
-	char *v4; // eax
+	const char *msg;
 
-	v3 = log_line_nr;
-	if ( error_code )
-	{
-		v4 = GetErr(error_code);
-		TermMsg("Direct sound error (%s:%d)\n%s", log_file_path, v3, v4);
+	if (error_code) {
+		msg = GetErrorStr(error_code);
+		app_fatal("Direct sound error (%s:%d)\n%s", log_file_path, log_line_nr, msg);
 	}
 }
 
-void __fastcall CenterDlg(HWND hDlg)
+/**
+ * @brief Centres the given dialog box.
+ */
+void center_window(HWND hDlg)
 {
-	LONG v1; // esi
-	LONG v2; // edi
-	int v3; // ebx
-	char *v4; // eax
-	struct tagRECT Rect; // [esp+Ch] [ebp-1Ch]
-	int v6; // [esp+1Ch] [ebp-Ch]
-	HDC hdc; // [esp+20h] [ebp-8h]
-	HWND hWnd; // [esp+24h] [ebp-4h]
+	LONG w, h;
+	int screenW, screenH;
+	tagRECT Rect;
+	HDC hdc;
 
-	hWnd = hDlg;
 	GetWindowRect(hDlg, &Rect);
-	v1 = Rect.right - Rect.left;
-	v2 = Rect.bottom - Rect.top;
-	hdc = GetDC(hWnd);
-	v6 = GetDeviceCaps(hdc, HORZRES);
-	v3 = GetDeviceCaps(hdc, VERTRES);
-	ReleaseDC(hWnd, hdc);
-	if ( !SetWindowPos(hWnd, HWND_TOP, (v6 - v1) / 2, (v3 - v2) / 2, 0, 0, SWP_NOZORDER|SWP_NOSIZE) )
-	{
-		v4 = GetLastErr();
-		TermMsg("center_window: %s", v4);
+	w = Rect.right - Rect.left;
+	h = Rect.bottom - Rect.top;
+	hdc = GetDC(hDlg);
+	screenW = GetDeviceCaps(hdc, HORZRES);
+	screenH = GetDeviceCaps(hdc, VERTRES);
+	ReleaseDC(hDlg, hdc);
+
+	if (!SetWindowPos(hDlg, HWND_TOP, (screenW - w) / 2, (screenH - h) / 2, 0, 0, SWP_NOZORDER | SWP_NOSIZE)) {
+		app_fatal("center_window: %s", TraceLastError());
 	}
 }
 
-void __fastcall TermDlg(int template_id, int error_code, char *log_file_path, int log_line_nr)
+/**
+ * @brief Sets the text of the given dialog.
+ */
+static void TextDlg(HWND hDlg, const char *text)
 {
-	int v4; // ebx
-	int v5; // edi
-	char *v6; // esi
-	char *v7; // eax
-	char *v8; // eax
-	LPARAM dwInitParam[128]; // [esp+Ch] [ebp-200h]
+	center_window(hDlg);
 
-	v4 = error_code;
-	v5 = template_id;
-	FreeDlg();
-	v6 = log_file_path;
-	v7 = strrchr(log_file_path, '\\');
-	if ( v7 )
-		v6 = v7 + 1;
-	v8 = GetErr(v4);
-	wsprintfA((LPSTR)dwInitParam, "%s\nat: %s line %d", v8, v6, log_line_nr);
-	if ( DialogBoxParamA(ghInst, (LPCSTR)(unsigned short)v5, ghMainWnd, (DLGPROC)FuncDlg, (LPARAM)dwInitParam) == -1 )
-		TermMsg("ErrDlg: %d", v5);
-	TermMsg(0);
+	if (text)
+		SetDlgItemText(hDlg, 1000, text);
 }
 
-bool __stdcall FuncDlg(HWND hDlg, UINT uMsg, WPARAM wParam, char *text)
+/**
+ * @brief Callback function which processes messages sent to the given dialog box.
+ */
+static BOOL CALLBACK FuncDlg(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	if ( uMsg == WM_INITDIALOG )
-	{
-		TextDlg(hDlg, text);
-	}
-	else
-	{
-		if ( uMsg != WM_COMMAND )
-			return 0;
-		if ( (_WORD)wParam == 1 )
-		{
-			EndDialog(hDlg, 1);
+	switch (uMsg) {
+	case WM_INITDIALOG:
+		TextDlg(hDlg, (char *)lParam);
+		break;
+	case WM_COMMAND:
+		if (LOWORD(wParam) == IDOK) {
+			EndDialog(hDlg, TRUE);
+		} else if (LOWORD(wParam) == IDCANCEL) {
+			EndDialog(hDlg, FALSE);
 		}
-		else if ( (_WORD)wParam == 2 )
-		{
-			EndDialog(hDlg, 0);
-		}
+		break;
+	default:
+		return FALSE;
 	}
-	return 1;
+
+	return TRUE;
 }
 
-void __fastcall TextDlg(HWND hDlg, char *text)
+/**
+ * @brief Terminates the game and displays an error dialog box based on the given dialog_id.
+ */
+void ErrDlg(int dialog_id, DWORD error_code, const char *log_file_path, int log_line_nr)
 {
-	char *v2; // esi
-	HWND v3; // edi
+	const char *size;
+	LPARAM dwInitParam[128];
 
-	v2 = text;
-	v3 = hDlg;
-	CenterDlg(hDlg);
-	if ( v2 )
-		SetDlgItemTextA(v3, 1000, v2);
-}
-
-void __fastcall ErrDlg(template_id template_id, int error_code, char *log_file_path, int log_line_nr)
-{
-	char *v4; // esi
-	int v5; // edi
-	unsigned short v6; // bx
-	char *v7; // eax
-	char *v8; // eax
-	LPARAM dwInitParam[128]; // [esp+Ch] [ebp-200h]
-
-	v4 = log_file_path;
-	v5 = error_code;
-	v6 = template_id;
-	v7 = strrchr(log_file_path, '\\');
-	if ( v7 )
-		v4 = v7 + 1;
-	v8 = GetErr(v5);
-	wsprintfA((LPSTR)dwInitParam, "%s\nat: %s line %d", v8, v4, log_line_nr);
-	DialogBoxParamA(ghInst, (LPCSTR)v6, ghMainWnd, (DLGPROC)FuncDlg, (LPARAM)dwInitParam);
-}
-
-void __fastcall FileErrDlg(char *error)
-{
-	char *v1; // esi
-
-	v1 = error;
 	FreeDlg();
-	if ( !v1 )
-		v1 = &empty_string;
-	if ( DialogBoxParamA(ghInst, (LPCSTR)0x6A, ghMainWnd, (DLGPROC)FuncDlg, (LPARAM)v1) == -1 )
-		TermMsg("FileErrDlg");
-	TermMsg(0);
+
+	size = strrchr(log_file_path, '\\');
+	if (size)
+		log_file_path = size + 1;
+
+	wsprintf((LPSTR)dwInitParam, "%s\nat: %s line %d", GetErrorStr(error_code), log_file_path, log_line_nr);
+	if (DialogBoxParam(ghInst, MAKEINTRESOURCE(dialog_id), ghMainWnd, (DLGPROC)FuncDlg, (LPARAM)dwInitParam) == -1)
+		app_fatal("ErrDlg: %d", dialog_id);
+
+	app_fatal(NULL);
 }
 
-void __fastcall DiskFreeDlg(char *error)
+#ifndef HELLFIRE
+/**
+ * @brief Displays a warning dialog box based on the given dialog_id and error code.
+ */
+void ErrOkDlg(int dialog_id, DWORD error_code, const char *log_file_path, int log_line_nr)
 {
-	char *v1; // esi
+	const char *size;
+	LPARAM dwInitParam[128];
 
-	v1 = error;
+	size = strrchr(log_file_path, '\\');
+	if (size)
+		log_file_path = size + 1;
+
+	wsprintf((LPSTR)dwInitParam, "%s\nat: %s line %d", GetErrorStr(error_code), log_file_path, log_line_nr);
+	DialogBoxParam(ghInst, MAKEINTRESOURCE(dialog_id), ghMainWnd, (DLGPROC)FuncDlg, (LPARAM)dwInitParam);
+}
+#endif
+
+/**
+ * @brief Terminates the game with a file not found error dialog.
+ */
+void FileErrDlg(const char *error)
+{
 	FreeDlg();
-	if ( DialogBoxParamA(ghInst, (LPCSTR)0x6E, ghMainWnd, (DLGPROC)FuncDlg, (LPARAM)v1) == -1 )
-		TermMsg("DiskFreeDlg");
-	TermMsg(0);
+
+	if (!error)
+		error = "";
+
+	if (DialogBoxParam(ghInst, MAKEINTRESOURCE(IDD_DIALOG3), ghMainWnd, (DLGPROC)FuncDlg, (LPARAM)error) == -1)
+		app_fatal("FileErrDlg");
+
+	app_fatal(NULL);
 }
 
-bool __cdecl InsertCDDlg()
+/**
+ * @brief Terminates the game with an out of disk space error dialog.
+ */
+void DiskFreeDlg(const char *error)
 {
-	int v0; // edi
-
-	ShowCursor(1);
-	v0 = DialogBoxParamA(ghInst, (LPCSTR)0x70, ghMainWnd, (DLGPROC)FuncDlg, (LPARAM)&empty_string);
-	if ( v0 == -1 )
-		TermMsg("InsertCDDlg");
-	ShowCursor(0);
-	return v0 == 1;
-}
-
-void __fastcall DirErrDlg(char *error)
-{
-	char *v1; // esi
-
-	v1 = error;
 	FreeDlg();
-	if ( DialogBoxParamA(ghInst, (LPCSTR)0x72, ghMainWnd, (DLGPROC)FuncDlg, (LPARAM)v1) == -1 )
-		TermMsg("DirErrorDlg");
-	TermMsg(0);
+
+	if (DialogBoxParam(ghInst, MAKEINTRESOURCE(IDD_DIALOG7), ghMainWnd, (DLGPROC)FuncDlg, (LPARAM)error) == -1)
+		app_fatal("DiskFreeDlg");
+
+	app_fatal(NULL);
 }
+
+/**
+ * @brief Terminates the game with an insert CD error dialog.
+ */
+BOOL InsertCDDlg()
+{
+	int nResult;
+
+	ShowCursor(TRUE);
+
+	nResult = DialogBoxParam(ghInst, MAKEINTRESOURCE(IDD_DIALOG9), ghMainWnd, (DLGPROC)FuncDlg, (LPARAM) "");
+	if (nResult == -1)
+		app_fatal("InsertCDDlg");
+
+	ShowCursor(FALSE);
+
+	return nResult == IDOK;
+}
+
+#ifndef HELLFIRE
+/**
+ * @brief Terminates the game with a read-only directory error dialog.
+ */
+void DirErrorDlg(const char *error)
+{
+	FreeDlg();
+
+	if (DialogBoxParam(ghInst, MAKEINTRESOURCE(IDD_DIALOG11), ghMainWnd, (DLGPROC)FuncDlg, (LPARAM)error) == -1)
+		app_fatal("DirErrorDlg");
+
+	app_fatal(NULL);
+}
+#endif

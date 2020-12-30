@@ -1,73 +1,77 @@
-//HEADER_GOES_HERE
+/**
+ * @file restrict.cpp
+ *
+ * Implementation of functionality for checking if the game will be able run on the system.
+ */
+#include "all.h"
 
-#include "../types.h"
-
-bool __cdecl SystemSupported()
+/**
+ * @brief Check that the OS version is the minimum required by the game
+ * @return True if suported
+ */
+BOOL SystemSupported()
 {
-	bool v0; // di
-	struct _OSVERSIONINFOA VersionInformation; // [esp+4h] [ebp-94h]
+	OSVERSIONINFO VersionInformation;
+	BOOL ret = FALSE;
 
-	v0 = 0;
-	memset(&VersionInformation, 0, 0x94u);
-	VersionInformation.dwOSVersionInfoSize = 148;
-	if ( GetVersionExA(&VersionInformation)
-	  && VersionInformation.dwPlatformId == 2
-	  && VersionInformation.dwMajorVersion >= 5 )
-	{
-		v0 = 1;
+	memset(&VersionInformation, 0, sizeof(VersionInformation));
+	VersionInformation.dwOSVersionInfoSize = sizeof(VersionInformation);
+	if (GetVersionEx(&VersionInformation)
+	    && VersionInformation.dwPlatformId == VER_PLATFORM_WIN32_NT
+	    && VersionInformation.dwMajorVersion >= 5) {
+		ret = TRUE;
 	}
-	return v0;
+	return ret;
 }
 
-bool __cdecl RestrictedTest()
-{
-	bool v0; // si
-	FILE *v2; // eax
-	char Buffer[260]; // [esp+4h] [ebp-104h]
+/**
+ * @brief Check that we have write access to the Windows install folder
+ * @return False if we have write access
 
-	v0 = 0;
-	if ( SystemSupported() && GetWindowsDirectoryA(Buffer, 0x104u) )
-	{
+ */
+BOOL RestrictedTest()
+{
+	FILE *f;
+	char Buffer[MAX_PATH];
+	BOOL ret = FALSE;
+
+	if (SystemSupported() && GetWindowsDirectory(Buffer, sizeof(Buffer))) {
 		strcat(Buffer, "\\Diablo1RestrictedTest.foo");
-		v2 = fopen(Buffer, "wt");
-		if ( v2 )
-		{
-			fclose(v2);
+		f = fopen(Buffer, "wt");
+		if (f) {
+			fclose(f);
 			remove(Buffer);
-		}
-		else
-		{
-			v0 = 1;
+		} else {
+			ret = TRUE;
 		}
 	}
-	return v0;
+	return ret;
 }
 
-bool __cdecl ReadOnlyTest()
-{
-	bool v0; // si
-	char *v1; // eax
-	FILE *v2; // eax
-	char Filename[260]; // [esp+4h] [ebp-104h]
+/**
+ * @brief Check that we have write access to the game install folder
+ * @return False if we have write access
 
-	v0 = 0;
-	if ( GetModuleFileNameA(ghInst, Filename, 0x104u) )
-	{
-		v1 = strrchr(Filename, '\\');
-		if ( v1 )
-		{
-			strcpy(v1 + 1, "Diablo1ReadOnlyTest.foo");
-			v2 = fopen(Filename, "wt");
-			if ( v2 )
-			{
-				fclose(v2);
+ */
+BOOL ReadOnlyTest()
+{
+	char *c;
+	FILE *f;
+	char Filename[MAX_PATH];
+	BOOL ret = FALSE;
+
+	if (GetModuleFileName(ghInst, Filename, sizeof(Filename))) {
+		c = strrchr(Filename, '\\');
+		if (c) {
+			strcpy(c + 1, "Diablo1ReadOnlyTest.foo");
+			f = fopen(Filename, "wt");
+			if (f) {
+				fclose(f);
 				remove(Filename);
-			}
-			else
-			{
-				v0 = 1;
+			} else {
+				ret = TRUE;
 			}
 		}
 	}
-	return v0;
+	return ret;
 }

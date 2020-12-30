@@ -1,243 +1,232 @@
-//HEADER_GOES_HERE
+/**
+ * @file palette.cpp
+ *
+ * Implementation of functions for handling the engines color palette.
+ */
+#include "all.h"
+#include "../3rdParty/Storm/Source/storm.h"
 
-#include "../types.h"
-
+/** In-memory palette to which gamma corrections are applied. */
 PALETTEENTRY logical_palette[256];
-int palette_cpp_init_value; // weak
+/** The active palette of the system. */
 PALETTEENTRY system_palette[256];
+/** The original palette as loaded from file. */
 PALETTEENTRY orig_palette[256];
-UINT gdwPalEntries;
+int gdwPalEntries;
 
-int palette_inf = 0x7F800000; // weak
+/* data */
 
-/* rdata */
+/** Specifies the gamma correction level. */
+int gamma_correction = 100;
+#ifndef HELLFIRE
+/** Specifies whether colour cycling is enabled. */
+BOOL color_cycling_enabled = TRUE;
+#endif
+/** Specifies whether the palette has max brightness. */
+BOOLEAN sgbFadedIn = TRUE;
 
-int gamma_correction = 100; // idb
-int color_cycling_enabled = 1; // idb
-bool sgbFadedIn = 1;
-
-struct palette_cpp_init
+static void palette_update()
 {
-	palette_cpp_init()
-	{
-		palette_cpp_init_value = palette_inf;
+	int nentries;
+	int max_entries;
+
+	if (lpDDPalette) {
+		nentries = 0;
+		max_entries = 256;
+		if (!fullscreen) {
+			nentries = gdwPalEntries;
+			max_entries = 2 * (128 - gdwPalEntries);
+		}
+		SDrawUpdatePalette(nentries, max_entries, &system_palette[nentries], 0);
 	}
-} _palette_cpp_init;
-// 47F16C: using guessed type int palette_inf;
-// 67DBCC: using guessed type int palette_cpp_init_value;
-
-void __cdecl palette_save_gamme()
-{
-	SRegSaveValue("Diablo", "Gamma Correction", 0, gamma_correction);
-	SRegSaveValue("Diablo", "Color Cycling", 0, color_cycling_enabled);
 }
 
-void __cdecl palette_init()
+static void ApplyGamma(PALETTEENTRY *dst, PALETTEENTRY *src, int n)
 {
-	int v0; // eax
-	int v1; // eax
+	int i;
+	double g;
 
-	palette_load_gamma();
-	memcpy(system_palette, orig_palette, 0x400u);
-	LoadSysPal();
-	v0 = lpDDInterface->CreatePalette(DDPCAPS_ALLOW256|DDPCAPS_8BIT, system_palette, &lpDDPalette, NULL);
-	if ( v0 )
-		TermDlg(111, v0, "C:\\Src\\Diablo\\Source\\PALETTE.CPP", 143);
-	v1 = lpDDSPrimary->SetPalette(lpDDPalette);
-	if ( v1 )
-		TermDlg(111, v1, "C:\\Src\\Diablo\\Source\\PALETTE.CPP", 146);
+	g = gamma_correction / 100.0;
+
+	for (i = 0; i < n; i++) {
+		dst->peRed = pow(src->peRed / 256.0, g) * 256.0;
+		dst->peGreen = pow(src->peGreen / 256.0, g) * 256.0;
+		dst->peBlue = pow(src->peBlue / 256.0, g) * 256.0;
+		dst++;
+		src++;
+	}
 }
 
-void __cdecl palette_load_gamma()
+void SaveGamma()
 {
-	int v3; // eax
-	int value; // [esp+8h] [ebp-4h]
+	SRegSaveValue(APP_NAME, "Gamma Correction", 0, gamma_correction);
+#ifndef HELLFIRE
+	SRegSaveValue(APP_NAME, "Color Cycling", FALSE, color_cycling_enabled);
+#endif
+}
+
+static void LoadGamma()
+{
+	int gamma_value;
+	int value;
 
 	value = gamma_correction;
-	if ( !SRegLoadValue("Diablo", "Gamma Correction", 0, &value) )
+	if (!SRegLoadValue(APP_NAME, "Gamma Correction", 0, &value))
 		value = 100;
-	if ( value >= 30 )
-	{
-		if ( value > 100 )
-			value = 100;
+	gamma_value = value;
+	if (value < 30) {
+		gamma_value = 30;
+	} else if (value > 100) {
+		gamma_value = 100;
 	}
-	else
-	{
-		value = 30;
-	}
-	gamma_correction = value - value % 5;
-	if ( SRegLoadValue("Diablo", "Color Cycling", 0, &value) )
-		v3 = value;
-	else
-		v3 = 1;
-	color_cycling_enabled = v3;
+	gamma_correction = gamma_value - gamma_value % 5;
+#ifndef HELLFIRE
+	if (!SRegLoadValue(APP_NAME, "Color Cycling", 0, &value))
+		value = 1;
+	color_cycling_enabled = value;
+#endif
 }
 
-void __cdecl LoadSysPal()
+static void LoadSysPal()
 {
-	HDC hDC; // ebx
-	int i; // ecx
-	int iStartIndex; // edi
+	HDC hDC;
+	int i, iStartIndex;
 
-	for(i = 0; i < 256; i++)
-		system_palette[i].peFlags = PC_NOCOLLAPSE|PC_RESERVED;
+	for (i = 0; i < 256; i++)
+		system_palette[i].peFlags = PC_NOCOLLAPSE | PC_RESERVED;
 
-	if ( !fullscreen )
-	{
+	if (!fullscreen) {
 		hDC = GetDC(NULL);
+
 		gdwPalEntries = GetDeviceCaps(hDC, NUMRESERVED) / 2;
 		GetSystemPaletteEntries(hDC, 0, gdwPalEntries, system_palette);
-		for ( i = 0; i < gdwPalEntries; i++ )
+		for (i = 0; i < gdwPalEntries; i++)
 			system_palette[i].peFlags = 0;
+
 		iStartIndex = 256 - gdwPalEntries;
 		GetSystemPaletteEntries(hDC, iStartIndex, gdwPalEntries, &system_palette[iStartIndex]);
-		if ( iStartIndex < 256 )
-		{
-			for(i = iStartIndex; i < 256; i++)
+		if (iStartIndex < 256) {
+			for (i = iStartIndex; i < 256; i++)
 				system_palette[i].peFlags = 0;
 		}
+
 		ReleaseDC(NULL, hDC);
 	}
 }
-// 484364: using guessed type int fullscreen;
 
-void __fastcall LoadPalette(char *pszFileName)
+void palette_init()
 {
-	int i; // eax
-	char PalData[256][3]; // [esp+0h] [ebp-304h]
-	void *pBuf; // [esp+300h] [ebp-4h]
+	DWORD error_code;
 
-	WOpenFile(pszFileName, &pBuf, 0);
-	WReadFile(pBuf, (char *)PalData, 768);
+	LoadGamma();
+	memcpy(system_palette, orig_palette, sizeof(orig_palette));
+	LoadSysPal();
+#ifdef HELLFIRE
+	error_code = lpDDInterface->CreatePalette(DDPCAPS_ALLOW256 | DDPCAPS_INITIALIZE | DDPCAPS_8BIT, system_palette, &lpDDPalette, NULL);
+#else
+	error_code = lpDDInterface->CreatePalette(DDPCAPS_ALLOW256 | DDPCAPS_8BIT, system_palette, &lpDDPalette, NULL);
+#endif
+	if (error_code)
+		ErrDlg(IDD_DIALOG8, error_code, "C:\\Src\\Diablo\\Source\\PALETTE.CPP", 143);
+	error_code = lpDDSPrimary->SetPalette(lpDDPalette);
+#ifndef RGBMODE
+	if (error_code)
+		ErrDlg(IDD_DIALOG8, error_code, "C:\\Src\\Diablo\\Source\\PALETTE.CPP", 146);
+#endif
+}
+
+void LoadPalette(const char *pszFileName)
+{
+	int i;
+	void *pBuf;
+	BYTE PalData[256][3];
+
+	/// ASSERT: assert(pszFileName);
+
+	WOpenFile(pszFileName, &pBuf, FALSE);
+	WReadFile(pBuf, (char *)PalData, sizeof(PalData));
 	WCloseFile(pBuf);
 
-	for(i = 0; i < 256; i++)
-	{
-		orig_palette[i].peFlags = 0;
+	for (i = 0; i < 256; i++) {
 		orig_palette[i].peRed = PalData[i][0];
 		orig_palette[i].peGreen = PalData[i][1];
 		orig_palette[i].peBlue = PalData[i][2];
+		orig_palette[i].peFlags = 0;
 	}
 }
 
-void __fastcall LoadRndLvlPal(int l)
+void LoadRndLvlPal(int l)
 {
-	char *pszPal; // ecx
-	char szTemp[260]; // [esp+4h] [ebp-104h]
+	int rv;
+	char szFileName[MAX_PATH];
 
-	if ( l )
-	{
-		sprintf(szTemp, "Levels\\L%iData\\L%i_%i.PAL", l, l, random(0, 4) + 1);
-		pszPal = szTemp;
+	if (l == DTYPE_TOWN) {
+		LoadPalette("Levels\\TownData\\Town.pal");
+	} else {
+		rv = random_(0, 4) + 1;
+		sprintf(szFileName, "Levels\\L%iData\\L%i_%i.PAL", l, l, rv);
+#ifdef HELLFIRE
+		if (l == 5) {
+			sprintf(szFileName, "NLevels\\L5Data\\L5Base.PAL");
+		}
+		if (l == 6) {
+			if (!UseNestArt) {
+				rv++;
+			}
+			sprintf(szFileName, "NLevels\\L%iData\\L%iBase%i.PAL", 6, 6, rv);
+		}
+#endif
+		LoadPalette(szFileName);
 	}
-	else
-	{
-		pszPal = "Levels\\TownData\\Town.pal";
-	}
-	LoadPalette(pszPal);
 }
 
-void __cdecl ResetPal()
+void ResetPal()
 {
-	if ( !lpDDSPrimary
-	  || lpDDSPrimary->IsLost() != DDERR_SURFACELOST
-	  || !lpDDSPrimary->Restore() )
-	{
+	if (!lpDDSPrimary
+	    || lpDDSPrimary->IsLost() != DDERR_SURFACELOST
+	    || !lpDDSPrimary->Restore()) {
 		SDrawRealizePalette();
 	}
 }
 
-void __cdecl palette_inc_gamma()
+void IncreaseGamma()
 {
-	if ( gamma_correction < 100 )
-	{
+	if (gamma_correction < 100) {
 		gamma_correction += 5;
-		if ( gamma_correction > 100 )
+		if (gamma_correction > 100)
 			gamma_correction = 100;
-		palette_apply_gamma_correction(system_palette, logical_palette, 256);
+		ApplyGamma(system_palette, logical_palette, 256);
 		palette_update();
 	}
 }
 
-void __cdecl palette_update()
+void DecreaseGamma()
 {
-	int v0; // ecx
-	int v1; // eax
-
-	if ( lpDDPalette )
-	{
-		v0 = 0;
-		v1 = 256;
-		if ( !fullscreen )
-		{
-			v0 = gdwPalEntries;
-			v1 = 2 * (128 - gdwPalEntries);
-		}
-		SDrawUpdatePalette(v0, v1, &system_palette[v0], 0);
-	}
-}
-// 484364: using guessed type int fullscreen;
-
-void __fastcall palette_apply_gamma_correction(PALETTEENTRY *dst, PALETTEENTRY *src, int n)
-{
-	PALETTEENTRY *v3; // edi
-	PALETTEENTRY *v4; // esi
-	double v5; // [esp+18h] [ebp-Ch]
-
-	v3 = src;
-	v4 = dst;
-	v5 = (double)gamma_correction * 0.01;
-	if ( n > 0 )
-	{
-		do
-		{
-			v4->peRed = pow(v3->peRed * 0.00390625, v5) * 256.0;
-			v4->peGreen = pow(v3->peGreen * 0.00390625, v5) * 256.0;
-			v4->peBlue = pow(v3->peBlue * 0.00390625, v5) * 256.0;
-			++v4;
-			++v3;
-			--n;
-		}
-		while ( n );
-	}
-}
-
-void __cdecl palette_dec_gamma()
-{
-	if ( gamma_correction > 30 )
-	{
+	if (gamma_correction > 30) {
 		gamma_correction -= 5;
-		if ( gamma_correction < 30 )
+		if (gamma_correction < 30)
 			gamma_correction = 30;
-		palette_apply_gamma_correction(system_palette, logical_palette, 256);
+		ApplyGamma(system_palette, logical_palette, 256);
 		palette_update();
 	}
 }
 
-int __fastcall palette_update_gamma(int gamma)
+int UpdateGamma(int gamma)
 {
-	if ( gamma )
-	{
+	if (gamma) {
 		gamma_correction = 130 - gamma;
-		palette_apply_gamma_correction(system_palette, logical_palette, 256);
+		ApplyGamma(system_palette, logical_palette, 256);
 		palette_update();
 	}
 	return 130 - gamma_correction;
 }
 
-void __cdecl BlackPalette()
+static void SetFadeLevel(DWORD fadeval)
 {
-	SetFadeLevel(0);
-}
+	int i;
 
-void __fastcall SetFadeLevel(int fadeval)
-{
-	int i; // eax
-
-	if ( lpDDInterface )
-	{
-		for(i = 0; i < 255; i++)
-		{
+	if (lpDDInterface) {
+		for (i = 0; i < 255; i++) { // BUGFIX: should be 256
 			system_palette[i].peRed = (fadeval * logical_palette[i].peRed) >> 8;
 			system_palette[i].peGreen = (fadeval * logical_palette[i].peGreen) >> 8;
 			system_palette[i].peBlue = (fadeval * logical_palette[i].peBlue) >> 8;
@@ -248,76 +237,156 @@ void __fastcall SetFadeLevel(int fadeval)
 	}
 }
 
-void __fastcall PaletteFadeIn(int fr)
+void BlackPalette()
 {
-	int i; // ebp
+	SetFadeLevel(0);
+}
 
-	palette_apply_gamma_correction(logical_palette, orig_palette, 256);
+void PaletteFadeIn(int fr)
+{
+	int i;
 
-	for(i = 0; i < 256; i += fr)
+	ApplyGamma(logical_palette, orig_palette, 256);
+	for (i = 0; i < 256; i += fr) {
 		SetFadeLevel(i);
-
+	}
 	SetFadeLevel(256);
-	memcpy(logical_palette, orig_palette, 0x400u);
-	sgbFadedIn = 1;
+	memcpy(logical_palette, orig_palette, sizeof(orig_palette));
+	sgbFadedIn = TRUE;
 }
 
-void __fastcall PaletteFadeOut(int fr)
+void PaletteFadeOut(int fr)
 {
-	int i; // esi
+	int i;
 
-	if ( sgbFadedIn )
-	{
-		for(i = 256; i > 0; i -= fr)
+	if (sgbFadedIn) {
+		for (i = 256; i > 0; i -= fr) {
 			SetFadeLevel(i);
-
+		}
 		SetFadeLevel(0);
-		sgbFadedIn = 0;
+		sgbFadedIn = FALSE;
 	}
 }
 
-void __cdecl palette_update_caves()
+void palette_update_caves()
 {
-	BYTE v0; // cx
-	signed int v1; // esi
-	signed int v2; // eax
-	BYTE v4; // [esp+6h] [ebp-2h]
-	BYTE v5;
+	int i;
+	PALETTEENTRY col;
 
-	v0 = system_palette[1].peRed;
-	v5 = system_palette[1].peGreen;
-	v4 = system_palette[1].peBlue;
-	v1 = 1;
-	do
-	{
-		v2 = v1++;
-		system_palette[v2].peRed = system_palette[v2 + 1].peRed;
-		system_palette[v2].peGreen = system_palette[v2 + 1].peGreen;
-		system_palette[v2].peBlue = system_palette[v2 + 1].peBlue;
+	col = system_palette[1];
+	for (i = 1; i < 31; i++) {
+		system_palette[i].peRed = system_palette[i + 1].peRed;
+		system_palette[i].peGreen = system_palette[i + 1].peGreen;
+		system_palette[i].peBlue = system_palette[i + 1].peBlue;
 	}
-	while ( v1 < 31 );
-	system_palette[v1].peRed = v0;
-	system_palette[v1].peGreen = v5;
-	system_palette[v1].peBlue = v4;
+	system_palette[i].peRed = col.peRed;
+	system_palette[i].peGreen = col.peGreen;
+	system_palette[i].peBlue = col.peBlue;
+
 	palette_update();
 }
 
-void __fastcall palette_update_quest_palette(int n)
+#ifdef HELLFIRE
+int dword_6E2D58;
+int dword_6E2D54;
+void palette_update_crypt()
 {
-	int i; // eax
+	int i;
+	PALETTEENTRY col;
 
-	for ( i = 32 - n; i >= 0; --i )
+	if (dword_6E2D58 > 1) {
+		col = system_palette[15];
+		for (i = 15; i > 1; i--) {
+			system_palette[i].peRed = system_palette[i - 1].peRed;
+			system_palette[i].peGreen = system_palette[i - 1].peGreen;
+			system_palette[i].peBlue = system_palette[i - 1].peBlue;
+		}
+		system_palette[i].peRed = col.peRed;
+		system_palette[i].peGreen = col.peGreen;
+		system_palette[i].peBlue = col.peBlue;
+
+		dword_6E2D58 = 0;
+	} else {
+		dword_6E2D58++;
+	}
+	if (dword_6E2D54 > 0) {
+		col = system_palette[31];
+		for (i = 31; i > 16; i--) {
+			system_palette[i].peRed = system_palette[i - 1].peRed;
+			system_palette[i].peGreen = system_palette[i - 1].peGreen;
+			system_palette[i].peBlue = system_palette[i - 1].peBlue;
+		}
+		system_palette[i].peRed = col.peRed;
+		system_palette[i].peGreen = col.peGreen;
+		system_palette[i].peBlue = col.peBlue;
+		palette_update();
+		dword_6E2D54++;
+	} else {
+		dword_6E2D54 = 1;
+	}
+}
+
+int dword_6E2D5C;
+int dword_6E2D60;
+void palette_update_hive()
+{
+	int i;
+	PALETTEENTRY col;
+
+	if (dword_6E2D60 == 2) {
+		col = system_palette[8];
+		for (i = 8; i > 1; i--) {
+			system_palette[i].peRed = system_palette[i - 1].peRed;
+			system_palette[i].peGreen = system_palette[i - 1].peGreen;
+			system_palette[i].peBlue = system_palette[i - 1].peBlue;
+		}
+		system_palette[i].peRed = col.peRed;
+		system_palette[i].peGreen = col.peGreen;
+		system_palette[i].peBlue = col.peBlue;
+		dword_6E2D60 = 0;
+	} else {
+		dword_6E2D60++;
+	}
+	if (dword_6E2D5C == 2) {
+		col = system_palette[15];
+		for (i = 15; i > 9; i--) {
+			system_palette[i].peRed = system_palette[i - 1].peRed;
+			system_palette[i].peGreen = system_palette[i - 1].peGreen;
+			system_palette[i].peBlue = system_palette[i - 1].peBlue;
+		}
+		system_palette[i].peRed = col.peRed;
+		system_palette[i].peGreen = col.peGreen;
+		system_palette[i].peBlue = col.peBlue;
+		palette_update();
+		dword_6E2D5C = 0;
+	} else {
+		dword_6E2D5C++;
+	}
+}
+
+#endif
+#ifndef SPAWN
+void palette_update_quest_palette(int n)
+{
+	int i;
+
+	for (i = 32 - n; i >= 0; i--) {
 		logical_palette[i] = orig_palette[i];
-	palette_apply_gamma_correction(system_palette, logical_palette, 32);
+	}
+	ApplyGamma(system_palette, logical_palette, 32);
 	palette_update();
 }
+#endif
 
-bool __cdecl palette_get_colour_cycling()
+#ifndef HELLFIRE
+BOOL palette_get_color_cycling()
 {
 	return color_cycling_enabled;
 }
 
-void __fastcall palette_set_color_cycling(bool enabled)
+BOOL palette_set_color_cycling(BOOL enabled)
 {
 	color_cycling_enabled = enabled;
+	return enabled;
 }
+#endif
