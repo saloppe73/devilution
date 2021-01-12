@@ -21,11 +21,7 @@ int stextsmax;
 int InStoreFlag; /** current frame # for the pentagram selector */
 ItemStruct storehold[48];
 int gossipstart;
-#ifdef HELLFIRE
-ItemStruct witchitem[25];
-#else
-ItemStruct witchitem[20];
-#endif
+ItemStruct witchitem[WITCH_ITEMS];
 BOOL stextscrl;
 int numpremium;
 ItemStruct healitem[20];
@@ -98,7 +94,7 @@ void InitStores()
 	numpremium = 0;
 	premiumlevel = 1;
 
-	for (i = 0; i < 6; i++)
+	for (i = 0; i < SMITH_PREMIUM_ITEMS; i++)
 		premiumitem[i]._itype = ITYPE_NONE;
 
 	boyitem._itype = ITYPE_NONE;
@@ -592,7 +588,7 @@ BOOL S_StartSPBuy()
 	int i;
 
 	storenumh = 0;
-	for (i = 0; i < 6; i++) {
+	for (i = 0; i < SMITH_PREMIUM_ITEMS; i++) {
 		if (premiumitem[i]._itype != ITYPE_NONE)
 			storenumh++;
 	}
@@ -643,7 +639,7 @@ BOOL SmithSellOk(int i)
 		return FALSE;
 	if (pI->_itype == ITYPE_GOLD)
 		return FALSE;
-	if (pI->_itype == ITYPE_MEAT)
+	if (pI->_itype == ITYPE_FOOD)
 		return FALSE;
 	if (pI->_itype == ITYPE_STAFF && pI->_iSpell != SPL_NULL)
 		return FALSE;
@@ -658,7 +654,7 @@ BOOL SmithSellOk(int i)
 		return FALSE;
 	if (plr[myplr].InvList[i]._itype == ITYPE_GOLD)
 		return FALSE;
-	if (plr[myplr].InvList[i]._itype == ITYPE_MEAT)
+	if (plr[myplr].InvList[i]._itype == ITYPE_FOOD)
 		return FALSE;
 	if (plr[myplr].InvList[i]._itype == ITYPE_STAFF)
 		return FALSE;
@@ -791,7 +787,7 @@ BOOL SmithRepairOk(int i)
 		return FALSE;
 	if (plr[myplr].InvList[i]._itype == ITYPE_GOLD)
 		return FALSE;
-	if (plr[myplr].InvList[i]._itype == ITYPE_MEAT)
+	if (plr[myplr].InvList[i]._itype == ITYPE_FOOD)
 		return FALSE;
 	if (plr[myplr].InvList[i]._iDurability == plr[myplr].InvList[i]._iMaxDur)
 		return FALSE;
